@@ -14,6 +14,7 @@ export default function AgentDashboard() {
   const [loginMode, setLoginMode] = useState<'join' | 'create'>('join')
   
   const [profile, setProfile] = useState<any>(null)
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
   const [totalScore, setTotalScore] = useState(0)
   const [round1Stages, setRound1Stages] = useState<any[]>([])
   const [round2Challenges, setRound2Challenges] = useState<any[]>([])
@@ -63,11 +64,20 @@ export default function AgentDashboard() {
     const profiles = DemoDB.getProfiles()
     // Find the profile using the stored agent callsign
     const prof = profiles.find(p => p.callsign === agentCallsign)
+    
+    if (!prof) {
+      // Auto-logout if removed
+      setAgentCallsign('')
+      setLoading(false)
+      return
+    }
+
     const state = DemoDB.getSystemState()
     setSystemState(state)
 
     if (prof) {
       setProfile(prof)
+      setTeamMembers(profiles.filter(p => p.team_id === prof.team_id))
       const teams = DemoDB.getTeams()
       const t = teams.find(t => t.id === prof.team_id)
       if (t) setAgentTeamName(t.name)
@@ -162,7 +172,7 @@ export default function AgentDashboard() {
       }
       
       const newTeam = DemoDB.addTeam(tName, tPass)
-      DemoDB.addProfile(callsign, newTeam.id)
+      DemoDB.addProfile(callsign, newTeam.id, true)
       setAgentCallsign(callsign)
       setLoading(true)
       return
@@ -177,10 +187,16 @@ export default function AgentDashboard() {
     }
 
     const profiles = DemoDB.getProfiles()
+    const teamProfiles = profiles.filter(p => p.team_id === team.id)
     let prof = profiles.find(p => p.callsign === callsign && p.team_id === team.id)
     
+    if (!prof && teamProfiles.length >= 4) {
+      setLoginError('Team is already full (Max 4 Agents).')
+      return
+    }
+
     if (!prof) {
-      prof = DemoDB.addProfile(callsign, team.id)
+      prof = DemoDB.addProfile(callsign, team.id, false)
     }
     
     setAgentCallsign(callsign)
@@ -284,6 +300,35 @@ export default function AgentDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Team Intel Section */}
+        <div className="mb-8 border border-zinc-900 bg-[#0a0a0a] p-6 rounded-lg shadow-xl">
+          <h2 className="text-sm font-bold tracking-widest text-zinc-400 uppercase mb-4 border-b border-zinc-900 pb-2">Team Intel ({teamMembers.length}/4)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {teamMembers.map(member => (
+              <div key={member.id} className="border border-zinc-800 bg-[#111] p-3 rounded flex justify-between items-center">
+                <div>
+                  <p className="text-xs font-bold text-white uppercase">{member.callsign}</p>
+                  {member.is_leader && <p className="text-[10px] text-orange-400 uppercase tracking-widest mt-1">Leader</p>}
+                </div>
+                {profile?.is_leader && member.id !== profile.id && (
+                  <button 
+                    onClick={() => {
+                      if(window.confirm(`Remove ${member.callsign} from the team?`)) {
+                        DemoDB.removeProfile(member.id);
+                        fetchArenaData();
+                      }
+                    }}
+                    className="text-[10px] text-red-500 hover:text-red-400 border border-red-900 hover:border-red-500 px-2 py-1 rounded transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
 
         {systemState.phase === 'PHASE_2' && (
           <div className="mb-8 border border-red-900 bg-red-950/20 p-4 rounded-lg animate-pulse text-center shadow-[0_0_15px_rgba(220,38,38,0.2)]">

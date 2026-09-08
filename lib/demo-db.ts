@@ -1,5 +1,5 @@
 export type Team = { id: string, name: string, password: string, is_finalist: boolean, created_at: number }
-export type Profile = { id: string, team_id: string, callsign: string }
+export type Profile = { id: string, team_id: string, callsign: string, is_leader?: boolean }
 export type StageProgress = { id: string, profile_id: string, team_id: string, stage_id?: string, challenge_id?: string, points_awarded: number }
 export type Round1Stage = { id: string, title: string, description?: string, location_clue: string, clue_answer: string, access_code: string, final_answer: string, points: number, hint?: string, hint_penalty?: number, is_active: boolean, created_at: number }
 export type Round2Challenge = { id: string, title: string, description: string, category: string, flag: string, points: number, hint?: string, hint_penalty?: number, is_active: boolean, created_at: number, file_url?: string, file_name?: string }
@@ -34,11 +34,15 @@ export const DemoDB = {
   },
 
   getProfiles: () => getLocal<Profile[]>('profiles', []),
-  addProfile: (callsign: string, teamId: string) => {
+  addProfile: (callsign: string, teamId: string, isLeader: boolean = false) => {
     const profiles = DemoDB.getProfiles()
-    const newProfile = { id: Math.random().toString(36).substring(7), team_id: teamId, callsign }
+    const newProfile = { id: Math.random().toString(36).substring(7), team_id: teamId, callsign, is_leader: isLeader }
     setLocal('profiles', [...profiles, newProfile])
     return newProfile
+  },
+  removeProfile: (id: string) => {
+    const profiles = DemoDB.getProfiles()
+    setLocal('profiles', profiles.filter(p => p.id !== id))
   },
   
   getSystemState: () => getLocal<SystemState>('system_state', { phase: 'PHASE_1', resetStrategy: 'CUMULATIVE' }),
