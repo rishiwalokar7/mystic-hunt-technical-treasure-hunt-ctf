@@ -5,10 +5,11 @@ import { DemoDB } from '@/lib/demo-db'
 
 type LeaderboardEntry = {
   id: string
-  callsign: string
+  team_name: string
   is_finalist: boolean
   total_points: number
   rank: number
+  members: number
 }
 
 export default function LiveScoreboard() {
@@ -17,25 +18,28 @@ export default function LiveScoreboard() {
 
   useEffect(() => {
     const fetchLeaderboard = () => {
+      const teams = DemoDB.getTeams()
       const profiles = DemoDB.getProfiles()
       const progress = DemoDB.getStageProgress()
       const state = DemoDB.getSystemState()
 
-      const rankedAgents = profiles.map((agent) => {
-        const agentProgress = progress.filter(p => p.profile_id === agent.id)
+      const rankedTeams = teams.map((team) => {
+        const teamProgress = progress.filter(p => p.team_id === team.id)
+        const teamMembers = profiles.filter(p => p.team_id === team.id).length
+        
         let totalPoints = 0
         if (state.phase === 'PHASE_2' && state.resetStrategy === 'HARD_RESET') {
-          totalPoints = agentProgress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0)
+          totalPoints = teamProgress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0)
         } else {
-          totalPoints = agentProgress.reduce((sum, p) => sum + p.points_awarded, 0)
+          totalPoints = teamProgress.reduce((sum, p) => sum + p.points_awarded, 0)
         }
         
-        return { ...agent, total_points: totalPoints, rank: 0 }
+        return { ...team, team_name: team.name, members: teamMembers, total_points: totalPoints, rank: 0 }
       })
       .sort((a, b) => b.total_points - a.total_points) // Sort highest to lowest
-      .map((agent, index) => ({ ...agent, rank: index + 1 })) // Assign rankings
+      .map((team, index) => ({ ...team, rank: index + 1 })) // Assign rankings
 
-      setLeaderboard(rankedAgents)
+      setLeaderboard(rankedTeams)
       setLoading(false)
     }
 
@@ -58,9 +62,11 @@ export default function LiveScoreboard() {
               Live Agent Rankings & Analytics
             </p>
           </div>
-          <a href="/admin" className="border border-green-500/50 hover:border-green-400 px-4 py-2 text-xs tracking-widest uppercase rounded transition-colors text-green-400">
-            Admin Panel
-          </a>
+          <div className="flex gap-4">
+            <a href="/" className="border border-zinc-800 hover:border-zinc-600 px-4 py-2 text-xs tracking-widest uppercase rounded transition-colors text-zinc-400">
+              ← Back to Arena
+            </a>
+          </div>
         </div>
 
         {loading ? (
@@ -72,7 +78,7 @@ export default function LiveScoreboard() {
             {/* Table Headers */}
             <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-zinc-800 text-xs tracking-widest text-zinc-500 uppercase font-bold">
               <div className="col-span-2 text-center">Rank</div>
-              <div className="col-span-5">Agent Callsign</div>
+              <div className="col-span-5">Team Name</div>
               <div className="col-span-2 text-center">Status</div>
               <div className="col-span-3 text-right">Total Score</div>
             </div>
@@ -80,26 +86,26 @@ export default function LiveScoreboard() {
             {/* Leaderboard Rows */}
             {leaderboard.length === 0 ? (
               <div className="text-center py-10 text-zinc-600 uppercase tracking-widest border border-zinc-900 rounded bg-zinc-950/40">
-                No active agents found in registry.
+                No active teams found in registry.
               </div>
             ) : (
-              leaderboard.map((agent) => (
+              leaderboard.map((team) => (
                 <div 
-                  key={agent.id} 
+                  key={team.id} 
                   className={`grid grid-cols-12 gap-4 px-6 py-4 rounded-lg items-center transition-all ${
-                    agent.rank === 1 ? 'bg-green-950/40 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 
-                    agent.rank <= 3 ? 'bg-zinc-900/50 border border-zinc-700' : 
+                    team.rank === 1 ? 'bg-green-950/40 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 
+                    team.rank <= 3 ? 'bg-zinc-900/50 border border-zinc-700' : 
                     'bg-zinc-950 border border-zinc-900'
                   }`}
                 >
-                  <div className={`col-span-2 text-center font-bold text-xl ${agent.rank === 1 ? 'text-green-400' : 'text-zinc-400'}`}>
-                    #{agent.rank}
+                  <div className={`col-span-2 text-center font-bold text-xl ${team.rank === 1 ? 'text-green-400' : 'text-zinc-400'}`}>
+                    #{team.rank}
                   </div>
                   <div className="col-span-5 font-bold text-white tracking-wide text-lg">
-                    {agent.callsign}
+                    {team.team_name} <span className="text-xs text-zinc-500 ml-2 font-normal uppercase tracking-widest">({team.members} agents)</span>
                   </div>
                   <div className="col-span-2 text-center">
-                    {agent.is_finalist ? (
+                    {team.is_finalist ? (
                       <span className="text-[10px] px-2 py-1 bg-green-500/20 text-green-400 border border-green-500/50 rounded uppercase tracking-wider">
                         Phase 2
                       </span>
@@ -110,7 +116,7 @@ export default function LiveScoreboard() {
                     )}
                   </div>
                   <div className="col-span-3 text-right font-bold text-green-400 text-xl tracking-widest">
-                    {agent.total_points}
+                    {team.total_points}
                   </div>
                 </div>
               ))

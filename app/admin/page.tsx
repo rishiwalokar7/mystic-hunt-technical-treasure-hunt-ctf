@@ -5,10 +5,11 @@ import { DemoDB } from '@/lib/demo-db'
 
 type LeaderboardEntry = {
   id: string
-  callsign: string
+  team_name: string
   is_finalist: boolean
   total_points: number
   rank: number
+  members: number
 }
 
 export default function AdminCommandCenter() {
@@ -17,8 +18,13 @@ export default function AdminCommandCenter() {
   const [loginPass, setLoginPass] = useState('')
   const [loginError, setLoginError] = useState('')
 
-  const [activeTab, setActiveTab] = useState<'deploy' | 'manage' | 'leaderboard' | 'control'>('control')
+  const [activeTab, setActiveTab] = useState<'deploy' | 'manage' | 'leaderboard' | 'control' | 'teams'>('control')
   const [deployType, setDeployType] = useState<'phase1' | 'phase2'>('phase1')
+  
+  // Teams State
+  const [teamsList, setTeamsList] = useState<any[]>([])
+  const [newTeamName, setNewTeamName] = useState('')
+  const [newTeamPass, setNewTeamPass] = useState('')
   
   // Shared Deploy State
   const [title, setTitle] = useState('')
@@ -72,27 +78,31 @@ export default function AdminCommandCenter() {
   const fetchNodes = () => {
     setStages(DemoDB.getRound1Stages())
     setChallenges(DemoDB.getRound2Challenges())
+    setTeamsList(DemoDB.getTeams())
   }
 
   const fetchLeaderboard = () => {
+    const teams = DemoDB.getTeams()
     const profiles = DemoDB.getProfiles()
     const progress = DemoDB.getStageProgress()
     const state = DemoDB.getSystemState()
 
-    const rankedAgents = profiles.map((agent) => {
-      const agentProgress = progress.filter(p => p.profile_id === agent.id)
+    const rankedTeams = teams.map((team) => {
+      const teamProgress = progress.filter(p => p.team_id === team.id)
+      const teamMembers = profiles.filter(p => p.team_id === team.id).length
+      
       let totalPoints = 0
       if (state.phase === 'PHASE_2' && state.resetStrategy === 'HARD_RESET') {
-        totalPoints = agentProgress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0)
+        totalPoints = teamProgress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0)
       } else {
-        totalPoints = agentProgress.reduce((sum, p) => sum + p.points_awarded, 0)
+        totalPoints = teamProgress.reduce((sum, p) => sum + p.points_awarded, 0)
       }
-      return { ...agent, total_points: totalPoints, rank: 0 }
+      return { ...team, team_name: team.name, members: teamMembers, total_points: totalPoints, rank: 0 }
     })
     .sort((a, b) => b.total_points - a.total_points)
-    .map((agent, index) => ({ ...agent, rank: index + 1 }))
+    .map((team, index) => ({ ...team, rank: index + 1 }))
 
-    setLeaderboard(rankedAgents)
+    setLeaderboard(rankedTeams)
     setLbLoading(false)
   }
 
@@ -202,9 +212,9 @@ export default function AdminCommandCenter() {
     
     // 2. Promote ALL teams and wipe leaderboard
     DemoDB.resetStageProgress()
-    const profiles = DemoDB.getProfiles()
-    profiles.forEach(agent => {
-      DemoDB.updateProfileFinalistStatus(agent.id, true)
+    const teams = DemoDB.getTeams()
+    teams.forEach(team => {
+      DemoDB.updateTeamFinalistStatus(team.id, true)
     })
 
     // 3. Update Global State
@@ -250,7 +260,8 @@ export default function AdminCommandCenter() {
   return (
     <div className="min-h-screen bg-black text-green-400 font-mono p-6">
       
-      <div className="max-w-4xl mx-auto flex justify-end gap-6 mb-4">
+      <div className="max-w-4xl mx-auto flex justify-between gap-6 mb-4">
+        <a href="/" className="text-[10px] tracking-widest uppercase text-zinc-600 hover:text-green-400 transition-colors">← Back to Arena</a>
         <button onClick={handleLogout} className="text-[10px] tracking-widest uppercase text-zinc-600 hover:text-red-400 transition-colors">[ Log Out ]</button>
       </div>
 
@@ -269,8 +280,11 @@ export default function AdminCommandCenter() {
           <button onClick={() => setActiveTab('manage')} className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest rounded border transition-all ${activeTab === 'manage' ? 'bg-green-900/10 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-500'}`}>
             2. Manage
           </button>
+          <button onClick={() => setActiveTab('teams')} className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest rounded border transition-all ${activeTab === 'teams' ? 'bg-green-900/10 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-500'}`}>
+            3. Teams
+          </button>
           <button onClick={() => setActiveTab('leaderboard')} className={`flex-1 py-3 text-[10px] uppercase font-bold tracking-widest rounded border transition-all ${activeTab === 'leaderboard' ? 'bg-green-900/10 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-500'}`}>
-            3. Leaderboard
+            4. Leaderboard
           </button>
         </div>
 
@@ -365,6 +379,48 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
+        {activeTab === 'teams' && (
+          <div className="animate-in fade-in duration-300">
+            <h2 className="text-sm font-bold tracking-widest text-zinc-400 uppercase mb-4 border-b border-zinc-900 pb-2">Manage Teams</h2>
+            
+            <div className="bg-[#0a0a0a] border border-zinc-800 p-5 rounded mb-6">
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Register New Team</h3>
+              <div className="flex gap-4">
+                <input type="text" placeholder="Team Name" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} className="flex-1 bg-[#111111] border border-zinc-800 rounded p-3 text-zinc-300 text-sm outline-none focus:border-green-500 transition-colors" />
+                <input type="text" placeholder="Team Password" value={newTeamPass} onChange={e => setNewTeamPass(e.target.value)} className="flex-1 bg-[#111111] border border-zinc-800 rounded p-3 text-zinc-300 text-sm outline-none focus:border-green-500 transition-colors" />
+                <button onClick={() => {
+                  if(!newTeamName || !newTeamPass) return;
+                  DemoDB.addTeam(newTeamName, newTeamPass);
+                  setNewTeamName(''); setNewTeamPass('');
+                  fetchNodes();
+                }} className="bg-green-900/30 border border-green-500 text-green-400 px-6 uppercase text-xs font-bold tracking-widest rounded hover:bg-green-900/50 transition-colors">
+                  Add Team
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {teamsList.map(team => (
+                <div key={team.id} className="border border-zinc-900 bg-[#111111] p-4 rounded flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-white text-sm">{team.name}</h3>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono mt-1">Pass: <span className="text-zinc-300">{team.password}</span> | Phase 2 Access: {team.is_finalist ? <span className="text-green-500">GRANTED</span> : <span className="text-red-500">DENIED</span>}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { DemoDB.updateTeamFinalistStatus(team.id, !team.is_finalist); fetchNodes() }} className="text-[10px] uppercase border border-zinc-700 px-3 py-1 rounded text-zinc-400 hover:bg-zinc-800 transition-colors">
+                      Toggle Access
+                    </button>
+                    <button onClick={() => { if(window.confirm('Delete this team?')) { DemoDB.deleteTeam(team.id); fetchNodes() } }} className="text-[10px] uppercase border border-red-900/50 px-3 py-1 rounded text-red-500 hover:bg-red-950/50 transition-colors">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {teamsList.length === 0 && <p className="text-xs text-zinc-600 uppercase text-center py-4">No teams registered yet.</p>}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'manage' && (
           <div className="animate-in fade-in duration-300 grid grid-cols-1 gap-6">
             <div>
@@ -431,33 +487,33 @@ export default function AdminCommandCenter() {
               <div className="space-y-3">
                 <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-zinc-800 text-[10px] tracking-widest text-zinc-500 uppercase font-bold">
                   <div className="col-span-2 text-center">Rank</div>
-                  <div className="col-span-5">Agent Callsign</div>
+                  <div className="col-span-5">Team Name</div>
                   <div className="col-span-2 text-center">Status</div>
                   <div className="col-span-3 text-right">Score</div>
                 </div>
 
                 {leaderboard.length === 0 ? (
                   <div className="text-center py-10 text-xs text-zinc-600 uppercase tracking-widest border border-zinc-900 rounded bg-[#0a0a0a]">
-                    No active agents found in registry.
+                    No active teams found in registry.
                   </div>
                 ) : (
-                  leaderboard.map((agent) => (
+                  leaderboard.map((team) => (
                     <div 
-                      key={agent.id} 
+                      key={team.id} 
                       className={`grid grid-cols-12 gap-4 px-4 py-4 rounded items-center transition-all ${
-                        agent.rank === 1 ? 'bg-green-950/20 border border-green-500/30' : 
-                        agent.rank <= 3 ? 'bg-zinc-900/30 border border-zinc-800' : 
+                        team.rank === 1 ? 'bg-green-950/20 border border-green-500/30' : 
+                        team.rank <= 3 ? 'bg-zinc-900/30 border border-zinc-800' : 
                         'bg-[#0a0a0a] border border-zinc-900'
                       }`}
                     >
-                      <div className={`col-span-2 text-center font-bold text-lg ${agent.rank === 1 ? 'text-green-400' : 'text-zinc-500'}`}>
-                        #{agent.rank}
+                      <div className={`col-span-2 text-center font-bold text-lg ${team.rank === 1 ? 'text-green-400' : 'text-zinc-500'}`}>
+                        #{team.rank}
                       </div>
                       <div className="col-span-5 font-bold text-zinc-300 tracking-wide text-sm">
-                        {agent.callsign}
+                        {team.team_name} <span className="text-[10px] text-zinc-500 ml-2 font-normal uppercase tracking-widest">({team.members} agents)</span>
                       </div>
                       <div className="col-span-2 text-center">
-                        {agent.is_finalist ? (
+                        {team.is_finalist ? (
                           <span className="text-[9px] px-1.5 py-0.5 bg-green-500/10 text-green-500 border border-green-500/30 rounded uppercase tracking-wider">
                             PH2
                           </span>
@@ -468,7 +524,7 @@ export default function AdminCommandCenter() {
                         )}
                       </div>
                       <div className="col-span-3 text-right font-bold text-green-400 text-lg tracking-widest">
-                        {agent.total_points}
+                        {team.total_points}
                       </div>
                     </div>
                   ))

@@ -5,13 +5,23 @@ import { DemoDB } from '@/lib/demo-db'
 
 export default function AgentDashboard() {
   const [agentCallsign, setAgentCallsign] = useState('')
-  const [loginInput, setLoginInput] = useState('')
+  const [agentTeamName, setAgentTeamName] = useState('')
+  
+  const [loginTeamName, setLoginTeamName] = useState('')
+  const [loginTeamPass, setLoginTeamPass] = useState('')
+  const [loginAgentName, setLoginAgentName] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loginMode, setLoginMode] = useState<'join' | 'create'>('join')
+  
   const [profile, setProfile] = useState<any>(null)
   const [totalScore, setTotalScore] = useState(0)
   const [round1Stages, setRound1Stages] = useState<any[]>([])
   const [round2Challenges, setRound2Challenges] = useState<any[]>([])
   const [systemState, setSystemState] = useState<{ phase: 'PHASE_1' | 'PHASE_2', resetStrategy: 'CUMULATIVE' | 'HARD_RESET' }>({ phase: 'PHASE_1', resetStrategy: 'CUMULATIVE' })
   const [loading, setLoading] = useState(true)
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null)
+
 
   // Interactive UI states for solving stages
   const [clueAnswers, setClueAnswers] = useState<{ [key: string]: string }>({})
@@ -25,8 +35,8 @@ export default function AgentDashboard() {
   const handleUseHint = (id: string, penalty: number, isChallenge = false) => {
     if (!profile) return
     if (!window.confirm(`Using this hint will cost you ${penalty} points. Proceed?`)) return
-    DemoDB.useHint(isChallenge ? { profile_id: profile.id, challenge_id: id } : { profile_id: profile.id, stage_id: id })
-    DemoDB.addStageProgress({ profile_id: profile.id, ...(isChallenge ? { challenge_id: id } : { stage_id: id }), points_awarded: -penalty })
+    DemoDB.consumeHint(isChallenge ? { profile_id: profile.id, challenge_id: id } : { profile_id: profile.id, stage_id: id })
+    DemoDB.addStageProgress({ profile_id: profile.id, team_id: profile.team_id, ...(isChallenge ? { challenge_id: id } : { stage_id: id }), points_awarded: -penalty })
     setFeedback(`Hint revealed! -${penalty} pts deducted.`)
     fetchArenaData()
   }
@@ -51,13 +61,18 @@ export default function AgentDashboard() {
     }
 
     const profiles = DemoDB.getProfiles()
+    // Find the profile using the stored agent callsign
     const prof = profiles.find(p => p.callsign === agentCallsign)
     const state = DemoDB.getSystemState()
     setSystemState(state)
 
     if (prof) {
       setProfile(prof)
-      const progress = DemoDB.getStageProgress().filter(p => p.profile_id === prof.id)
+      const teams = DemoDB.getTeams()
+      const t = teams.find(t => t.id === prof.team_id)
+      if (t) setAgentTeamName(t.name)
+
+      const progress = DemoDB.getStageProgress().filter(p => p.team_id === prof.team_id)
       if (state.phase === 'PHASE_2' && state.resetStrategy === 'HARD_RESET') {
         setTotalScore(progress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0))
       } else {
@@ -95,7 +110,7 @@ export default function AgentDashboard() {
     }
 
     if (answers[stageId]?.trim().toLowerCase() === correctFinalAnswer.trim().toLowerCase()) {
-      DemoDB.addStageProgress({ profile_id: profile.id, stage_id: stageId, points_awarded: points })
+      DemoDB.addStageProgress({ profile_id: profile.id, team_id: profile.team_id, stage_id: stageId, points_awarded: points })
       setFeedback('Checkpoint Secured. Points Awarded.')
       fetchArenaData()
     } else {
@@ -116,7 +131,7 @@ export default function AgentDashboard() {
     }
 
     if (flags[challengeId]?.trim() === correctFlag.trim()) {
-      DemoDB.addStageProgress({ profile_id: profile.id, challenge_id: challengeId, points_awarded: points })
+      DemoDB.addStageProgress({ profile_id: profile.id, team_id: profile.team_id, challenge_id: challengeId, points_awarded: points })
       setFeedback('Breach Successful. Points Awarded.')
       fetchArenaData()
     } else {
@@ -126,14 +141,46 @@ export default function AgentDashboard() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!loginInput.trim()) return
-    const callsign = loginInput.trim().toUpperCase().replace(/ /g, '_')
+    setLoginError('')
     
+    if (!loginTeamName.trim() || !loginTeamPass.trim() || !loginAgentName.trim()) {
+      setLoginError('All fields are required.')
+      return
+    }
+
+    const tName = loginTeamName.trim()
+    const tPass = loginTeamPass.trim()
+    const callsign = loginAgentName.trim().toUpperCase().replace(/ /g, '_')
+    
+    const teams = DemoDB.getTeams()
+    
+    if (loginMode === 'create') {
+      const existingTeam = teams.find(t => t.name.toLowerCase() === tName.toLowerCase())
+      if (existingTeam) {
+        setLoginError('Team Name is already taken.')
+        return
+      }
+      
+      const newTeam = DemoDB.addTeam(tName, tPass)
+      DemoDB.addProfile(callsign, newTeam.id)
+      setAgentCallsign(callsign)
+      setLoading(true)
+      return
+    }
+
+    // Join / Login Mode
+    const team = teams.find(t => t.name.toLowerCase() === tName.toLowerCase() && t.password === tPass)
+
+    if (!team) {
+      setLoginError('ACCESS DENIED: Invalid Team Name or Password.')
+      return
+    }
+
     const profiles = DemoDB.getProfiles()
-    let prof = profiles.find(p => p.callsign === callsign)
+    let prof = profiles.find(p => p.callsign === callsign && p.team_id === team.id)
     
     if (!prof) {
-      prof = DemoDB.addProfile(callsign)
+      prof = DemoDB.addProfile(callsign, team.id)
     }
     
     setAgentCallsign(callsign)
@@ -147,43 +194,70 @@ export default function AgentDashboard() {
       <div className="min-h-screen bg-black text-green-400 font-mono p-6 flex items-center justify-center">
         <div className="max-w-md w-full border border-green-500/30 bg-[#0a0a0a] p-8 rounded-lg shadow-[0_0_20px_rgba(34,197,94,0.1)]">
           <h1 className="text-2xl font-bold tracking-widest text-center mb-2 uppercase">Agent Login</h1>
-          <p className="text-xs text-center text-zinc-500 mb-8 uppercase tracking-widest">Connect to Event Mainframe</p>
+          <p className="text-xs text-center text-zinc-500 mb-6 uppercase tracking-widest">Connect to Event Mainframe</p>
+          
+          <div className="flex gap-2 mb-6">
+            <button 
+              onClick={() => { setLoginMode('join'); setLoginError(''); }} 
+              className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${loginMode === 'join' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
+            >
+              Join / Login
+            </button>
+            <button 
+              onClick={() => { setLoginMode('create'); setLoginError(''); }} 
+              className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${loginMode === 'create' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
+            >
+              Create Team
+            </button>
+          </div>
           
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="text-[10px] text-green-500 uppercase tracking-widest block mb-2">Agent Callsign</label>
+              <label className="text-[10px] text-green-500 uppercase tracking-widest block mb-2">Team Name</label>
               <input 
                 type="text" 
-                value={loginInput}
-                onChange={(e) => setLoginInput(e.target.value)}
-                placeholder="e.g. CYBER_NINJA"
-                className="w-full bg-[#111111] border border-green-900 rounded p-3 text-white outline-none focus:border-green-500 uppercase transition-colors"
+                value={loginTeamName}
+                onChange={(e) => setLoginTeamName(e.target.value)}
+                placeholder="e.g. CYBER_NINJAS"
+                className="w-full bg-[#111111] border border-green-900 rounded p-3 text-white outline-none focus:border-green-500 transition-colors"
                 autoFocus
                 required
               />
             </div>
             <div>
-              <label className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-2">Access Password (Demo)</label>
+              <label className="text-[10px] text-green-500 uppercase tracking-widest block mb-2">Team Password</label>
               <input 
                 type="password" 
+                value={loginTeamPass}
+                onChange={(e) => setLoginTeamPass(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-[#111111] border border-zinc-900 rounded p-3 text-zinc-500 outline-none cursor-not-allowed"
-                disabled
+                className="w-full bg-[#111111] border border-green-900 rounded p-3 text-white outline-none focus:border-green-500 transition-colors"
+                required
               />
-              <p className="text-[10px] text-zinc-600 mt-2">Password validation disabled for offline demo.</p>
             </div>
+            <div>
+              <label className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-2">{loginMode === 'create' ? 'Leader Agent Name' : 'Your Agent Name'}</label>
+              <input 
+                type="text" 
+                value={loginAgentName}
+                onChange={(e) => setLoginAgentName(e.target.value)}
+                placeholder="e.g. JASON"
+                className="w-full bg-[#111111] border border-zinc-800 rounded p-3 text-white outline-none focus:border-zinc-500 uppercase transition-colors"
+                required
+              />
+            </div>
+            
+            {loginError && <p className="text-[10px] text-red-500 uppercase tracking-widest text-center">{loginError}</p>}
             
             <button 
               type="submit"
               className="w-full bg-green-950/40 border border-green-600/50 hover:bg-green-900/60 text-green-400 py-4 rounded text-sm font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(34,197,94,0.1)] hover:shadow-[0_0_25px_rgba(34,197,94,0.3)]"
             >
-              Initialize Uplink
+              {loginMode === 'create' ? 'Register & Initialize' : 'Initialize Uplink'}
             </button>
           </form>
           <div className="mt-6 text-center">
             <a href="/scoreboard" className="text-[10px] text-zinc-600 hover:text-zinc-400 tracking-widest uppercase transition-colors">View Scoreboard</a>
-            <span className="text-zinc-800 mx-3">|</span>
-            <a href="/admin" className="text-[10px] text-zinc-800 hover:text-zinc-700 tracking-widest uppercase transition-colors">Admin</a>
           </div>
         </div>
       </div>
@@ -197,7 +271,7 @@ export default function AgentDashboard() {
         {/* Top Header / Navigation */}
         <div className="border border-zinc-900 bg-[#0a0a0a] p-6 rounded-lg mb-8 flex flex-col md:flex-row justify-between items-center gap-4 shadow-2xl">
           <div>
-            <h1 className="text-2xl font-bold tracking-widest text-white uppercase">{agentCallsign} (OFFLINE DEMO)</h1>
+            <h1 className="text-2xl font-bold tracking-widest text-white uppercase">{agentTeamName} <span className="text-sm text-zinc-500 ml-2">[{agentCallsign}]</span></h1>
             <p className="text-xs text-green-500 tracking-widest mt-1">STATUS: {systemState.phase === 'PHASE_2' ? 'PHASE 2 UNLOCKED' : 'PHASE 1 FIELD OPS ACTIVE'}</p>
           </div>
           <div className="flex items-center gap-6">
@@ -226,120 +300,18 @@ export default function AgentDashboard() {
           {/* PHASE 1: FIELD OPS */}
           <div className={systemState.phase === 'PHASE_2' ? 'opacity-30 pointer-events-none' : ''}>
             <h2 className="text-sm font-bold tracking-widest text-zinc-400 uppercase mb-4 border-b border-zinc-900 pb-2">Phase 1: Field Ops ({round1Stages.length})</h2>
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {round1Stages.map(stage => {
-                const isClueUnlocked = clueUnlocked[stage.id]
-                const isCodeUnlocked = unlockedCodes[stage.id]
                 const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.stage_id === stage.id)
-
                 return (
-                  <div key={stage.id} className="border border-zinc-900 bg-[#0a0a0a] p-5 rounded-lg relative overflow-hidden">
+                  <div key={stage.id} onClick={() => setSelectedStageId(stage.id)} className="cursor-pointer border border-zinc-900 bg-[#0a0a0a] hover:border-zinc-700 hover:bg-[#111] p-5 rounded-lg relative overflow-hidden flex flex-col items-center justify-center text-center h-32 transition-colors">
                     {isSecured && <div className="absolute inset-0 bg-green-950/20 pointer-events-none border border-green-500/30"></div>}
-                    
-                    <div className="flex justify-between items-start mb-3 relative z-10">
-                      <h3 className="font-bold text-white uppercase text-sm">
-                        {stage.title} {isSecured && <span className="text-green-500 text-xs ml-2">[SECURED]</span>}
-                      </h3>
-                      <span className="text-xs font-bold text-green-500">{stage.points} PTS</span>
-                    </div>
-
-                    {/* STEP 1: Location Clue */}
-                    <div className="mb-4 relative z-10">
-                      <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Location Clue</p>
-                      <p className="text-xs text-zinc-300 bg-zinc-900/50 border border-zinc-800 rounded p-3">{stage.location_clue}</p>
-                    </div>
-
-                    {/* Hint Button for Phase 1 */}
-                    {stage.hint && !isSecured && (() => {
-                      const hintUsed = DemoDB.hasUsedHint(profile?.id || '', stage.id)
-                      return (
-                        <div className="mb-3 relative z-10">
-                          {hintUsed ? (
-                            <div className="bg-orange-950/20 border border-orange-900/40 rounded p-3">
-                              <p className="text-[10px] text-orange-500 uppercase tracking-widest mb-1">Hint Used</p>
-                              <p className="text-xs text-zinc-300">{stage.hint}</p>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => handleUseHint(stage.id, stage.hint_penalty || 25)}
-                              className="text-[10px] border border-orange-700/40 text-orange-500 hover:bg-orange-950/30 px-3 py-1.5 rounded uppercase tracking-widest transition-colors"
-                            >
-                              💡 Get Hint (-{stage.hint_penalty || 25} pts)
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })()}
-
-                    {/* STEP 1 INPUT: Submit clue answer to unlock */}
-                    {!isClueUnlocked && !isSecured && (
-                      <div className="relative z-10">
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Step 1: Enter your answer to the clue above</p>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="Your clue answer..."
-                            value={clueAnswers[stage.id] || ''}
-                            onChange={(e) => setClueAnswers({ ...clueAnswers, [stage.id]: e.target.value })}
-                            className="flex-1 bg-[#111111] border border-zinc-800 rounded p-2 text-xs text-white outline-none focus:border-yellow-500 transition-colors"
-                          />
-                          <button
-                            onClick={() => handleUnlockClue(stage.id, stage.clue_answer)}
-                            className="border border-yellow-600/50 text-yellow-400 hover:bg-yellow-900/20 px-4 text-xs uppercase tracking-widest rounded transition-colors"
-                          >
-                            Confirm
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* STEP 2: Access Code reveal + Description + Final Answer */}
-                    {(isClueUnlocked || isSecured) && (
-                      <div className="space-y-3 relative z-10">
-
-                        {/* Access Code Display */}
-                        {stage.access_code && (
-                          <div className="border border-yellow-500/40 bg-yellow-950/20 rounded p-4 text-center">
-                            <p className="text-[10px] text-yellow-500 uppercase tracking-widest mb-2">Your Access Code</p>
-                            <p className="text-2xl font-bold text-yellow-400 tracking-[0.3em]">{stage.access_code}</p>
-                          </div>
-                        )}
-
-                        {/* Challenge Description */}
-                        {stage.description && (
-                          <div className="bg-green-950/10 border border-green-900/30 rounded p-3">
-                            <p className="text-[10px] text-green-500 uppercase tracking-widest mb-1">Challenge Brief</p>
-                            <p className="text-xs text-zinc-300">{stage.description}</p>
-                          </div>
-                        )}
-
-                        {/* Final Answer */}
-                        <div className="bg-green-950/10 border border-green-900/30 p-3 rounded">
-                          <p className="text-[10px] text-green-400 uppercase tracking-widest mb-2">Submit Final Answer</p>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="Final Answer..."
-                              value={answers[stage.id] || ''}
-                              onChange={(e) => setAnswers({ ...answers, [stage.id]: e.target.value })}
-                              disabled={isSecured}
-                              className="flex-1 bg-[#111111] border border-zinc-800 rounded p-2 text-xs text-white outline-none focus:border-green-500 disabled:opacity-50 transition-colors"
-                            />
-                            <button
-                              onClick={() => handleSubmitPhase1(stage.id, stage.final_answer, stage.points)}
-                              disabled={isSecured}
-                              className="bg-green-900/30 border border-green-500 text-green-400 px-4 text-xs uppercase tracking-widest rounded hover:bg-green-900/50 disabled:opacity-50 transition-colors"
-                            >
-                              Submit
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    <h3 className="font-bold text-white uppercase text-sm mb-2 relative z-10">{stage.title}</h3>
+                    <span className="text-xs font-bold text-green-500 relative z-10">{stage.points} PTS {isSecured && '[SECURED]'}</span>
                   </div>
                 )
               })}
-              {round1Stages.length === 0 && <p className="text-xs text-zinc-600 uppercase">{systemState.phase === 'PHASE_2' ? 'Phase 1 Archived.' : 'No field stages deployed yet.'}</p>}
+              {round1Stages.length === 0 && <p className="text-xs text-zinc-600 uppercase col-span-full">{systemState.phase === 'PHASE_2' ? 'Phase 1 Archived.' : 'No field stages deployed yet.'}</p>}
             </div>
           </div>
 
@@ -356,84 +328,249 @@ export default function AgentDashboard() {
               </div>
             ) : (
               /* UNLOCKED STATE — show challenges */
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {round2Challenges.map(chal => {
                   const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.challenge_id === chal.id)
-                  
                   return (
-                    <div key={chal.id} className="border border-zinc-900 bg-[#0a0a0a] p-5 rounded-lg relative overflow-hidden">
+                    <div key={chal.id} onClick={() => setSelectedChallengeId(chal.id)} className="cursor-pointer border border-zinc-900 bg-[#0a0a0a] hover:border-zinc-700 hover:bg-[#111] p-5 rounded-lg relative overflow-hidden flex flex-col items-center justify-center text-center h-32 transition-colors">
                       {isSecured && <div className="absolute inset-0 bg-green-950/20 pointer-events-none border border-green-500/30"></div>}
-                      
-                      <div className="flex justify-between items-start mb-2 relative z-10">
-                        <div>
-                          <span className="text-[10px] font-bold text-green-500 mr-2">[{chal.category || 'GENERAL'}]</span>
-                          <h3 className="font-bold text-white uppercase text-sm inline">{chal.title} {isSecured && <span className="text-green-500 text-xs ml-2">[SECURED]</span>}</h3>
-                        </div>
-                        <span className="text-xs font-bold text-green-500">{chal.points} PTS</span>
-                      </div>
-                      <p className="text-xs text-zinc-400 mb-4 relative z-10">{chal.description}</p>
-
-                      {/* Hint Button for Phase 2 */}
-                      {chal.hint && !isSecured && (() => {
-                        const hintUsed = DemoDB.hasUsedHint(profile?.id || '', undefined, chal.id)
-                        return (
-                          <div className="mb-4 relative z-10">
-                            {hintUsed ? (
-                              <div className="bg-orange-950/20 border border-orange-900/40 rounded p-3">
-                                <p className="text-[10px] text-orange-500 uppercase tracking-widest mb-1">Hint Used</p>
-                                <p className="text-xs text-zinc-300">{chal.hint}</p>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleUseHint(chal.id, chal.hint_penalty || 25, true)}
-                                className="text-[10px] border border-orange-700/40 text-orange-500 hover:bg-orange-950/30 px-3 py-1.5 rounded uppercase tracking-widest transition-colors"
-                              >
-                                💡 Get Hint (-{chal.hint_penalty || 25} pts)
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })()}
-                      
-                      {chal.file_url && (
-                        <div className="mb-4 relative z-10">
-                          <a 
-                            href={chal.file_url} 
-                            download={chal.file_name || 'intel_file'} 
-                            className="inline-block text-[10px] border border-green-500/50 hover:bg-green-900/30 text-green-400 px-3 py-1.5 rounded uppercase tracking-widest transition-colors"
-                          >
-                            ↓ Download Attached Intel
-                          </a>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2 relative z-10">
-                        <input 
-                          type="text" 
-                          placeholder="mystic{...}" 
-                          value={flags[chal.id] || ''} 
-                          onChange={(e) => setFlags({ ...flags, [chal.id]: e.target.value })} 
-                          disabled={isSecured}
-                          className="flex-1 bg-[#111111] border border-zinc-800 rounded p-2 text-xs text-white outline-none focus:border-green-500 disabled:opacity-50" 
-                        />
-                        <button 
-                          onClick={() => handleSubmitPhase2(chal.id, chal.flag, chal.points)}
-                          disabled={isSecured}
-                          className="border border-green-600/50 bg-green-900/20 text-green-400 px-4 text-xs uppercase tracking-widest rounded hover:bg-green-900/50 disabled:opacity-50"
-                        >
-                          Submit Flag
-                        </button>
-                      </div>
+                      <span className="text-[10px] font-bold text-green-500 mb-1 relative z-10">[{chal.category || 'GENERAL'}]</span>
+                      <h3 className="font-bold text-white uppercase text-sm mb-2 relative z-10">{chal.title}</h3>
+                      <span className="text-xs font-bold text-green-500 relative z-10">{chal.points} PTS {isSecured && '[SECURED]'}</span>
                     </div>
                   )
                 })}
-                {round2Challenges.length === 0 && <p className="text-xs text-zinc-600 uppercase">No digital breaches deployed yet.</p>}
+                {round2Challenges.length === 0 && <p className="text-xs text-zinc-600 uppercase col-span-full">No digital breaches deployed yet.</p>}
               </div>
             )}
           </div>
 
         </div>
       </div>
+
+      {/* MODALS */}
+      {selectedStageId && (() => {
+        const stage = round1Stages.find(s => s.id === selectedStageId)
+        if (!stage) return null
+        const isClueUnlocked = clueUnlocked[stage.id]
+        const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.stage_id === stage.id)
+        
+        return (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedStageId(null)}>
+            <div className="bg-[#1a1525] border border-purple-900/50 w-full max-w-2xl rounded-xl shadow-[0_0_50px_rgba(107,33,168,0.2)] overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+              {/* Top Bar */}
+              <div className="bg-[#241d35] px-4 py-3 flex justify-between items-center border-b border-purple-900/30">
+                <div className="flex gap-2">
+                  <span className="bg-[#3a2f50] text-purple-200 text-xs px-3 py-1.5 rounded font-medium">Phase 1</span>
+                </div>
+                <button onClick={() => setSelectedStageId(null)} className="text-zinc-400 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="p-8 overflow-y-auto">
+                <div className="text-center mb-8 relative">
+                  {isSecured && <div className="absolute top-0 right-0 border border-green-500 text-green-500 text-xs px-3 py-1 rounded bg-green-950/30 uppercase tracking-widest font-bold">Secured</div>}
+                  <h2 className="text-3xl font-bold text-purple-100 mb-2">{stage.title}</h2>
+                  <p className="text-2xl text-purple-400 font-mono">{stage.points}</p>
+                </div>
+                
+                {/* STEP 1: Location Clue */}
+                <div className="mb-6">
+                  <p className="text-purple-300 text-sm mb-2 font-medium">Location Clue:</p>
+                  <p className="text-purple-100/80 bg-[#241d35] rounded-md p-4 whitespace-pre-wrap">{stage.location_clue}</p>
+                </div>
+
+                {stage.hint && !isSecured && (() => {
+                  const hintUsed = DemoDB.hasUsedHint(profile?.id || '', stage.id)
+                  return (
+                    <div className="mb-6 text-center">
+                      {hintUsed ? (
+                        <div className="inline-block bg-[#3a2f50] rounded-md p-4 text-left">
+                          <p className="text-orange-300 text-sm font-medium mb-1">Hint Used</p>
+                          <p className="text-purple-100/80">{stage.hint}</p>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleUseHint(stage.id, stage.hint_penalty || 25)}
+                          className="bg-[#241d35] hover:bg-[#3a2f50] text-orange-300 px-4 py-2 rounded text-sm transition-colors border border-purple-900/30"
+                        >
+                          💡 Get Hint (-{stage.hint_penalty || 25} pts)
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {!isClueUnlocked && !isSecured && (
+                  <div className="bg-[#241d35] rounded-md p-4 mb-6">
+                    <p className="text-purple-300 text-sm mb-3">Enter your answer to the clue above to unlock the final challenge:</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Location answer..."
+                        value={clueAnswers[stage.id] || ''}
+                        onChange={(e) => setClueAnswers({ ...clueAnswers, [stage.id]: e.target.value })}
+                        className="flex-1 bg-[#1a1525] border border-purple-900/50 rounded p-3 text-white outline-none focus:border-purple-500 transition-colors"
+                      />
+                      <button
+                        onClick={() => handleUnlockClue(stage.id, stage.clue_answer)}
+                        className="bg-[#3a2f50] hover:bg-[#4a3f60] text-purple-100 px-6 rounded transition-colors"
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {(isClueUnlocked || isSecured) && (
+                  <div className="space-y-6">
+                    {stage.access_code && (
+                      <div className="bg-[#241d35] border border-green-500/30 rounded p-6 text-center">
+                        <p className="text-green-400 text-sm mb-2 font-medium">Location Confirmed! Your Access Code:</p>
+                        <p className="text-3xl font-bold text-white tracking-widest font-mono">{stage.access_code}</p>
+                      </div>
+                    )}
+
+                    {stage.description && (
+                      <div>
+                        <p className="text-purple-300 text-sm mb-2 font-medium">Challenge Details:</p>
+                        <p className="text-purple-100/80 bg-[#241d35] rounded-md p-4 whitespace-pre-wrap">{stage.description}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Action Bar */}
+              {(isClueUnlocked || isSecured) && (
+                <div className="bg-[#241d35] p-4 border-t border-purple-900/30 flex gap-4">
+                  {isSecured ? (
+                    <div className="flex-1 bg-green-950/20 border border-green-500/30 rounded px-4 py-3 text-green-400 text-center font-bold uppercase tracking-widest">
+                      Challenge Secured
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        placeholder="Final Answer..."
+                        value={answers[stage.id] || ''}
+                        onChange={(e) => setAnswers({ ...answers, [stage.id]: e.target.value })}
+                        className="flex-1 bg-[#1a1525] border border-purple-900/50 rounded px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                      />
+                      <button
+                        onClick={() => { handleSubmitPhase1(stage.id, stage.final_answer, stage.points); setSelectedStageId(null); }}
+                        className="bg-[#3a2f50] hover:bg-[#4a3f60] text-purple-100 px-8 rounded transition-colors font-medium"
+                      >
+                        Submit
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {selectedChallengeId && (() => {
+        const chal = round2Challenges.find(c => c.id === selectedChallengeId)
+        if (!chal) return null
+        const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.challenge_id === chal.id)
+        
+        return (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedChallengeId(null)}>
+            <div className="bg-[#211a2f] border border-[#3e3450] w-full max-w-2xl rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+              {/* Top Bar */}
+              <div className="bg-[#211a2f] px-4 py-3 flex justify-between items-center border-b border-[#3e3450]">
+                <div className="flex gap-2">
+                  <span className="bg-[#3e3450] text-[#dedede] text-xs px-3 py-1.5 rounded uppercase tracking-widest">Challenge</span>
+                  <span className="bg-transparent text-[#9a8ba8] text-xs px-3 py-1.5 rounded uppercase tracking-widest border border-[#3e3450]">{chal.category || 'GENERAL'}</span>
+                </div>
+                <button onClick={() => setSelectedChallengeId(null)} className="text-zinc-400 hover:text-white transition-colors">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="p-8 overflow-y-auto">
+                <div className="text-center mb-8 relative">
+                  {isSecured && <div className="absolute top-0 right-0 border border-green-500 text-green-500 text-xs px-3 py-1 rounded bg-green-950/30 uppercase tracking-widest font-bold">Secured</div>}
+                  <h2 className="text-[28px] font-bold text-white mb-2 tracking-widest uppercase">{chal.title}</h2>
+                  <p className="text-[24px] text-[#9a8ba8] font-mono">{chal.points} PTS</p>
+                </div>
+                
+                <div className="mb-8">
+                  <p className="text-[#9a8ba8] text-sm mb-2 font-medium uppercase tracking-widest">Challenge Description</p>
+                  <div className="bg-[#1a1425] border border-[#3e3450] rounded-md p-5">
+                    <p className="text-[#cccccc] whitespace-pre-wrap text-[15px]">{chal.description}</p>
+                  </div>
+                </div>
+
+                {chal.hint && !isSecured && (() => {
+                  const hintUsed = DemoDB.hasUsedHint(profile?.id || '', undefined, chal.id)
+                  return (
+                    <div className="mb-8 text-center">
+                      {hintUsed ? (
+                        <div className="inline-block bg-[#3e3450] rounded p-4 text-left max-w-full">
+                          <p className="text-orange-300 text-sm font-medium mb-1">Hint Used</p>
+                          <p className="text-[#cccccc]">{chal.hint}</p>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleUseHint(chal.id, chal.hint_penalty || 25, true)}
+                          className="bg-[#2d243e] hover:bg-[#3e3450] text-orange-300 px-6 py-2 rounded text-sm transition-colors border border-[#3e3450] inline-block"
+                        >
+                          💡 Get Hint (-{chal.hint_penalty || 25} pts)
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {chal.file_url && (
+                  <div className="mb-2 text-left">
+                    <a 
+                      href={chal.file_url} 
+                      download={chal.file_name || 'intel_file'} 
+                      className="inline-flex flex-col items-center justify-center bg-[#a65d9d] hover:bg-[#8f4a87] text-white px-8 py-3 rounded shadow transition-colors min-w-[140px] text-sm"
+                    >
+                      <svg className="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                      {chal.file_name || 'Download'}
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Action Bar */}
+              <div className="p-4 flex gap-4 mt-auto mb-2 mx-4 border-t border-[#3e3450] pt-6">
+                {isSecured ? (
+                  <div className="flex-1 bg-green-950/20 border border-green-500/30 rounded px-4 py-3 text-green-400 text-center font-bold uppercase tracking-widest">
+                    Challenge Secured
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Enter Flag (e.g. mystic{...})"
+                      value={flags[chal.id] || ''}
+                      onChange={(e) => setFlags({ ...flags, [chal.id]: e.target.value })}
+                      className="flex-1 bg-[#1a1425] border border-[#3e3450] rounded px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors placeholder:text-[#6a5b78]"
+                    />
+                    <button
+                      onClick={() => { handleSubmitPhase2(chal.id, chal.flag, chal.points); setSelectedChallengeId(null); }}
+                      className="bg-[#3e3450] hover:bg-[#4a3f60] text-white px-8 py-3 rounded transition-colors text-sm uppercase tracking-widest font-bold"
+                    >
+                      Submit
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

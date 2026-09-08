@@ -1,5 +1,6 @@
-export type Profile = { id: string, callsign: string, is_finalist: boolean }
-export type StageProgress = { id: string, profile_id: string, stage_id?: string, challenge_id?: string, points_awarded: number }
+export type Team = { id: string, name: string, password: string, is_finalist: boolean, created_at: number }
+export type Profile = { id: string, team_id: string, callsign: string }
+export type StageProgress = { id: string, profile_id: string, team_id: string, stage_id?: string, challenge_id?: string, points_awarded: number }
 export type Round1Stage = { id: string, title: string, description?: string, location_clue: string, clue_answer: string, access_code: string, final_answer: string, points: number, hint?: string, hint_penalty?: number, is_active: boolean, created_at: number }
 export type Round2Challenge = { id: string, title: string, description: string, category: string, flag: string, points: number, hint?: string, hint_penalty?: number, is_active: boolean, created_at: number, file_url?: string, file_name?: string }
 export type SystemState = { phase: 'PHASE_1' | 'PHASE_2', resetStrategy: 'CUMULATIVE' | 'HARD_RESET' }
@@ -17,29 +18,27 @@ const setLocal = (key: string, val: any) => {
 }
 
 export const DemoDB = {
-  getProfiles: () => {
-    const profiles = getLocal<Profile[]>('profiles', [])
-    if (profiles.length === 0) {
-      // Seed dummy data
-      const initial = [
-        { id: 'p1', callsign: 'GHOST_LEAD', is_finalist: false },
-        { id: 'p2', callsign: 'CYBER_NINJA', is_finalist: false },
-        { id: 'p3', callsign: 'RECRUIT_007', is_finalist: false }
-      ]
-      setLocal('profiles', initial)
-      return initial
-    }
-    return profiles
+  getTeams: () => getLocal<Team[]>('teams', []),
+  addTeam: (name: string, password: string) => {
+    const teams = DemoDB.getTeams()
+    const newTeam = { id: Math.random().toString(36).substring(7), name, password, is_finalist: false, created_at: Date.now() }
+    setLocal('teams', [...teams, newTeam])
+    return newTeam
   },
-  addProfile: (callsign: string) => {
+  deleteTeam: (id: string) => {
+    setLocal('teams', DemoDB.getTeams().filter(t => t.id !== id))
+  },
+  updateTeamFinalistStatus: (id: string, isFinalist: boolean) => {
+    const teams = DemoDB.getTeams()
+    setLocal('teams', teams.map(t => t.id === id ? { ...t, is_finalist: isFinalist } : t))
+  },
+
+  getProfiles: () => getLocal<Profile[]>('profiles', []),
+  addProfile: (callsign: string, teamId: string) => {
     const profiles = DemoDB.getProfiles()
-    const newProfile = { id: Math.random().toString(36).substring(7), callsign, is_finalist: false }
+    const newProfile = { id: Math.random().toString(36).substring(7), team_id: teamId, callsign }
     setLocal('profiles', [...profiles, newProfile])
     return newProfile
-  },
-  updateProfileFinalistStatus: (id: string, isFinalist: boolean) => {
-    const profiles = DemoDB.getProfiles()
-    setLocal('profiles', profiles.map(p => p.id === id ? { ...p, is_finalist: isFinalist } : p))
   },
   
   getSystemState: () => getLocal<SystemState>('system_state', { phase: 'PHASE_1', resetStrategy: 'CUMULATIVE' }),
@@ -52,7 +51,7 @@ export const DemoDB = {
   resetStageProgress: () => setLocal('stage_progress', []),
 
   getHintUsage: () => getLocal<HintUsage[]>('hint_usage', []),
-  useHint: (usage: HintUsage) => {
+  consumeHint: (usage: HintUsage) => {
     const existing = DemoDB.getHintUsage()
     setLocal('hint_usage', [...existing, usage])
   },
