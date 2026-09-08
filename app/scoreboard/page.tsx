@@ -52,16 +52,20 @@ export default function LiveScoreboard() {
 
   return (
     <div className="min-h-screen p-6 relative z-0">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#08131C] to-transparent opacity-50 -z-10"></div>
       <div className="max-w-4xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800/60 pb-6 mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-wide text-white mb-1 uppercase">
-              GLOBAL LEADERBOARD
-            </h1>
-            <p className="text-[10px] text-cyan-400 uppercase tracking-widest font-mono">
-              Live Agent Rankings & Analytics
-            </p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-cyan-900/50 pb-6 mb-8 gap-4">
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center justify-center w-12 h-12 rounded-full border border-amber-600/30 bg-[#030B12] text-amber-500/80 shadow-[0_0_15px_rgba(217,119,6,0.1)]">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+            </div>
+            <div>
+              <p className="text-[10px] text-amber-500/70 uppercase tracking-widest font-mono flex items-center gap-2">
+                MYSTIC HUNT <span className="text-slate-600">|</span> <span>LIVE ANALYTICS</span>
+              </p>
+              <h1 className="text-3xl font-bold tracking-wide text-white mb-1 uppercase">
+                GLOBAL LEADERBOARD
+              </h1>
+            </div>
           </div>
           <div className="flex gap-4">
             <a href="/" className="border border-slate-700/50 hover:border-cyan-500 hover:bg-cyan-500/10 px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase rounded-lg transition-all text-slate-300 hover:text-cyan-400 font-mono flex items-center gap-2">

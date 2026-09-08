@@ -230,7 +230,6 @@ export default function AdminCommandCenter() {
   if (!isAuthed) {
     return (
       <div className="min-h-screen p-6 relative z-0 flex items-center justify-center">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1A0B13] to-[#02070D] -z-10"></div>
         <div className="max-w-sm w-full border border-red-900/40 bg-[#0A0508]/90 backdrop-blur-md p-8 rounded-xl shadow-[0_8px_32px_rgba(220,38,38,0.15)] relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-50 rounded-t-xl"></div>
           
@@ -268,7 +267,6 @@ export default function AdminCommandCenter() {
 
   return (
     <div className="min-h-screen p-6 relative z-0">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#08131C] to-transparent opacity-50 -z-10"></div>
       
       <div className="max-w-4xl mx-auto flex justify-between gap-6 mb-4">
         <a href="/" className="text-[10px] tracking-widest uppercase text-slate-500 hover:text-cyan-400 transition-colors font-mono flex items-center gap-2">
