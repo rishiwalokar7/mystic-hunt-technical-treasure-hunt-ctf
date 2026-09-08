@@ -239,14 +239,20 @@ export default function AgentDashboard() {
           <div className="flex gap-2 mb-6">
             <button 
               type="button"
-              onClick={() => { setAuthAction('login'); setLoginError(''); setAuthSuccess(''); }} 
+              onClick={() => { 
+                setAuthAction('login'); setLoginError(''); setAuthSuccess(''); 
+                setLoginTeamName(''); setLoginTeamPass(''); setLoginAgentName('');
+              }}
               className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${authAction === 'login' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
             >
               Login
             </button>
             <button 
               type="button"
-              onClick={() => { setAuthAction('register'); setLoginError(''); setAuthSuccess(''); }} 
+              onClick={() => { 
+                setAuthAction('register'); setLoginError(''); setAuthSuccess(''); 
+                setLoginTeamName(''); setLoginTeamPass(''); setLoginAgentName('');
+              }}
               className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${authAction === 'register' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
             >
               Register
@@ -257,14 +263,20 @@ export default function AgentDashboard() {
             <div className="flex gap-2 mb-6">
               <button 
                 type="button"
-                onClick={() => { setRegisterMode('join'); setLoginError(''); setAuthSuccess(''); }} 
+                onClick={() => { 
+                  setRegisterMode('join'); setLoginError(''); setAuthSuccess(''); 
+                  setLoginTeamName(''); setLoginTeamPass(''); setLoginAgentName('');
+                }}
                 className={`flex-1 py-1 text-[9px] uppercase tracking-widest rounded border transition-colors ${registerMode === 'join' ? 'bg-zinc-800 border-zinc-600 text-white' : 'border-zinc-900 text-zinc-600 hover:border-zinc-700'}`}
               >
                 Join Existing Team
               </button>
               <button 
                 type="button"
-                onClick={() => { setRegisterMode('create'); setLoginError(''); setAuthSuccess(''); }} 
+                onClick={() => { 
+                  setRegisterMode('create'); setLoginError(''); setAuthSuccess(''); 
+                  setLoginTeamName(''); setLoginTeamPass(''); setLoginAgentName('');
+                }}
                 className={`flex-1 py-1 text-[9px] uppercase tracking-widest rounded border transition-colors ${registerMode === 'create' ? 'bg-zinc-800 border-zinc-600 text-white' : 'border-zinc-900 text-zinc-600 hover:border-zinc-700'}`}
               >
                 Create New Team
@@ -283,6 +295,7 @@ export default function AgentDashboard() {
                 className="w-full bg-[#111111] border border-green-900 rounded p-3 text-white outline-none focus:border-green-500 transition-colors"
                 autoFocus
                 required
+                autoComplete="off"
               />
             </div>
             <div>
@@ -294,6 +307,7 @@ export default function AgentDashboard() {
                 placeholder="••••••••"
                 className="w-full bg-[#111111] border border-green-900 rounded p-3 text-white outline-none focus:border-green-500 transition-colors"
                 required
+                autoComplete="new-password"
               />
             </div>
             <div>
@@ -305,6 +319,7 @@ export default function AgentDashboard() {
                 placeholder="e.g. JASON"
                 className="w-full bg-[#111111] border border-zinc-800 rounded p-3 text-white outline-none focus:border-zinc-500 uppercase transition-colors"
                 required
+                autoComplete="off"
               />
             </div>
             
