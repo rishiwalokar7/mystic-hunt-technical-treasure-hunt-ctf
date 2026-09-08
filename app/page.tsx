@@ -103,9 +103,9 @@ export default function AgentDashboard() {
 
   const handleSubmitPhase1 = (stageId: string, correctFinalAnswer: string, points: number) => {
     if (!profile) return
-    const currentProgress = DemoDB.getStageProgress().find(p => p.profile_id === profile.id && p.stage_id === stageId)
+    const currentProgress = DemoDB.getStageProgress().find(p => p.team_id === profile.team_id && p.stage_id === stageId)
     if (currentProgress) {
-      setFeedback('Checkpoint Already Secured.')
+      setFeedback('Checkpoint Already Secured by your team.')
       return
     }
 
@@ -124,9 +124,9 @@ export default function AgentDashboard() {
       setFeedback('Phase 2 is currently locked.')
       return
     }
-    const currentProgress = DemoDB.getStageProgress().find(p => p.profile_id === profile.id && p.challenge_id === challengeId)
+    const currentProgress = DemoDB.getStageProgress().find(p => p.team_id === profile.team_id && p.challenge_id === challengeId)
     if (currentProgress) {
-      setFeedback('System Already Breached.')
+      setFeedback('System Already Breached by your team.')
       return
     }
 
@@ -302,7 +302,7 @@ export default function AgentDashboard() {
             <h2 className="text-sm font-bold tracking-widest text-zinc-400 uppercase mb-4 border-b border-zinc-900 pb-2">Phase 1: Field Ops ({round1Stages.length})</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {round1Stages.map(stage => {
-                const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.stage_id === stage.id)
+                const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.stage_id === stage.id)
                 return (
                   <div key={stage.id} onClick={() => setSelectedStageId(stage.id)} className="cursor-pointer border border-zinc-900 bg-[#0a0a0a] hover:border-zinc-700 hover:bg-[#111] p-5 rounded-lg relative overflow-hidden flex flex-col items-center justify-center text-center h-32 transition-colors">
                     {isSecured && <div className="absolute inset-0 bg-green-950/20 pointer-events-none border border-green-500/30"></div>}
@@ -330,7 +330,7 @@ export default function AgentDashboard() {
               /* UNLOCKED STATE — show challenges */
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {round2Challenges.map(chal => {
-                  const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.challenge_id === chal.id)
+                  const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.challenge_id === chal.id)
                   return (
                     <div key={chal.id} onClick={() => setSelectedChallengeId(chal.id)} className="cursor-pointer border border-zinc-900 bg-[#0a0a0a] hover:border-zinc-700 hover:bg-[#111] p-5 rounded-lg relative overflow-hidden flex flex-col items-center justify-center text-center h-32 transition-colors">
                       {isSecured && <div className="absolute inset-0 bg-green-950/20 pointer-events-none border border-green-500/30"></div>}
@@ -353,7 +353,7 @@ export default function AgentDashboard() {
         const stage = round1Stages.find(s => s.id === selectedStageId)
         if (!stage) return null
         const isClueUnlocked = clueUnlocked[stage.id]
-        const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.stage_id === stage.id)
+        const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.stage_id === stage.id)
         
         return (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedStageId(null)}>
@@ -477,7 +477,7 @@ export default function AgentDashboard() {
       {selectedChallengeId && (() => {
         const chal = round2Challenges.find(c => c.id === selectedChallengeId)
         if (!chal) return null
-        const isSecured = DemoDB.getStageProgress().some(p => p.profile_id === profile?.id && p.challenge_id === chal.id)
+        const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.challenge_id === chal.id)
         
         return (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedChallengeId(null)}>
