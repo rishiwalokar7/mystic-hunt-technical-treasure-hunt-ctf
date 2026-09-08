@@ -67,6 +67,13 @@ export const DemoDB = {
   },
   addStageProgress: (progress: Omit<StageProgress, 'id'>) => {
     const existing = DemoDB.getStageProgress()
+    const duplicate = existing.find(p => 
+      p.team_id === progress.team_id && 
+      ((progress.stage_id && p.stage_id === progress.stage_id) || 
+       (progress.challenge_id && p.challenge_id === progress.challenge_id))
+    );
+    if (duplicate) return duplicate;
+    
     const newProgress = { ...progress, id: Math.random().toString(36).substring(7) }
     setLocal('stage_progress', [...existing, newProgress])
     return newProgress

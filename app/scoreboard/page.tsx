@@ -51,32 +51,35 @@ export default function LiveScoreboard() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-black text-green-400 font-mono p-6">
+    <div className="min-h-screen p-6 relative z-0">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#08131C] to-transparent opacity-50 -z-10"></div>
       <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800/60 pb-6 mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-widest text-green-400 mb-1">
-              {'>'} {'>'} GLOBAL LEADERBOARD (OFFLINE DEMO)
+            <h1 className="text-3xl font-bold tracking-wide text-white mb-1 uppercase">
+              GLOBAL LEADERBOARD
             </h1>
-            <p className="text-xs text-zinc-500 uppercase tracking-widest">
+            <p className="text-[10px] text-cyan-400 uppercase tracking-widest font-mono">
               Live Agent Rankings & Analytics
             </p>
           </div>
           <div className="flex gap-4">
-            <a href="/" className="border border-zinc-800 hover:border-zinc-600 px-4 py-2 text-xs tracking-widest uppercase rounded transition-colors text-zinc-400">
-              ← Back to Arena
+            <a href="/" className="border border-slate-700/50 hover:border-cyan-500 hover:bg-cyan-500/10 px-5 py-2.5 text-[10px] font-bold tracking-widest uppercase rounded-lg transition-all text-slate-300 hover:text-cyan-400 font-mono flex items-center gap-2">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+              Back to Arena
             </a>
           </div>
         </div>
 
         {loading ? (
-          <div className="text-zinc-600 tracking-widest uppercase text-center py-20">
-            {'>'} SYNCING WITH MAINFRAME...
+          <div className="text-cyan-500 tracking-widest uppercase text-center py-20 font-mono flex flex-col items-center gap-4">
+            <svg className="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            SYNCING WITH MAINFRAME...
           </div>
         ) : (
           <div className="space-y-3">
             {/* Table Headers */}
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 border-b border-zinc-800 text-xs tracking-widest text-zinc-500 uppercase font-bold">
+            <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-slate-800/60 text-[10px] tracking-widest text-slate-500 uppercase font-bold font-mono">
               <div className="col-span-2 text-center">Rank</div>
               <div className="col-span-5">Team Name</div>
               <div className="col-span-2 text-center">Status</div>
@@ -85,37 +88,44 @@ export default function LiveScoreboard() {
 
             {/* Leaderboard Rows */}
             {leaderboard.length === 0 ? (
-              <div className="text-center py-10 text-zinc-600 uppercase tracking-widest border border-zinc-900 rounded bg-zinc-950/40">
+              <div className="text-center py-12 text-slate-500 uppercase tracking-widest border border-slate-800/60 rounded-xl bg-[#030B12] font-mono text-xs">
                 No active teams found in registry.
               </div>
             ) : (
               leaderboard.map((team) => (
                 <div 
                   key={team.id} 
-                  className={`grid grid-cols-12 gap-4 px-6 py-4 rounded-lg items-center transition-all ${
-                    team.rank === 1 ? 'bg-green-950/40 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 
-                    team.rank <= 3 ? 'bg-zinc-900/50 border border-zinc-700' : 
-                    'bg-zinc-950 border border-zinc-900'
+                  className={`grid grid-cols-12 gap-4 px-6 py-5 rounded-xl items-center transition-all ${
+                    team.rank === 1 ? 'bg-gradient-to-r from-amber-500/10 to-[#030B12] border border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]' : 
+                    team.rank === 2 ? 'bg-[#030B12] border border-slate-300/20' : 
+                    team.rank === 3 ? 'bg-[#030B12] border border-orange-700/30' : 
+                    'bg-[#061019] border border-slate-800/60'
                   }`}
                 >
-                  <div className={`col-span-2 text-center font-bold text-xl ${team.rank === 1 ? 'text-green-400' : 'text-zinc-400'}`}>
+                  <div className={`col-span-2 text-center font-bold text-xl font-mono ${
+                    team.rank === 1 ? 'text-amber-400' : 
+                    team.rank === 2 ? 'text-slate-300' : 
+                    team.rank === 3 ? 'text-orange-400' : 
+                    'text-slate-500'
+                  }`}>
                     #{team.rank}
                   </div>
-                  <div className="col-span-5 font-bold text-white tracking-wide text-lg">
-                    {team.team_name} <span className="text-xs text-zinc-500 ml-2 font-normal uppercase tracking-widest">({team.members} agents)</span>
+                  <div className="col-span-5 font-bold text-white tracking-wide text-lg flex items-center gap-3">
+                    {team.team_name} 
+                    <span className="text-[10px] text-slate-500 font-mono tracking-widest border border-slate-700/50 bg-[#030B12] px-2 py-0.5 rounded">{team.members} AGENTS</span>
                   </div>
                   <div className="col-span-2 text-center">
                     {team.is_finalist ? (
-                      <span className="text-[10px] px-2 py-1 bg-green-500/20 text-green-400 border border-green-500/50 rounded uppercase tracking-wider">
+                      <span className="text-[10px] px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded uppercase tracking-wider font-mono font-bold">
                         Phase 2
                       </span>
                     ) : (
-                      <span className="text-[10px] px-2 py-1 bg-zinc-800 text-zinc-400 border border-zinc-700 rounded uppercase tracking-wider">
+                      <span className="text-[10px] px-2.5 py-1 bg-[#030B12] text-slate-400 border border-slate-700/50 rounded uppercase tracking-wider font-mono">
                         Phase 1
                       </span>
                     )}
                   </div>
-                  <div className="col-span-3 text-right font-bold text-green-400 text-xl tracking-widest">
+                  <div className={`col-span-3 text-right font-bold text-xl tracking-widest font-mono ${team.rank === 1 ? 'text-amber-400' : 'text-cyan-400'}`}>
                     {team.total_points}
                   </div>
                 </div>
