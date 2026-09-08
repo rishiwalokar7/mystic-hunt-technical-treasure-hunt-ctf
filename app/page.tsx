@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DemoDB } from '@/lib/demo-db'
+import { supabase } from '@/lib/supabase'
 
 export default function AgentDashboard() {
   const [agentCallsign, setAgentCallsign] = useState('')
@@ -34,12 +34,20 @@ export default function AgentDashboard() {
   const [answers, setAnswers] = useState<{ [key: string]: string }>({})
   const [flags, setFlags] = useState<{ [key: string]: string }>({})
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [stageProgress, setStageProgress] = useState<any[]>([])
+  const [hintUsage, setHintUsage] = useState<any[]>([])
 
-  const handleUseHint = (id: string, penalty: number, isChallenge = false) => {
+
+  const handleUseHint = async (id: string, penalty: number, isChallenge = false) => {
     if (!profile) return
     if (!window.confirm(`Using this hint will cost you ${penalty} points. Proceed?`)) return
-    DemoDB.consumeHint(isChallenge ? { profile_id: profile.id, challenge_id: id } : { profile_id: profile.id, stage_id: id })
-    DemoDB.addStageProgress({ profile_id: profile.id, team_id: profile.team_id, ...(isChallenge ? { challenge_id: id } : { stage_id: id }), points_awarded: -penalty })
+    
+    const hintObj = isChallenge ? { profile_id: profile.id, challenge_id: id } : { profile_id: profile.id, stage_id: id }
+    await supabase.from('hint_usage').insert(hintObj as any)
+    
+    const progObj = { profile_id: profile.id, team_id: profile.team_id, ...(isChallenge ? { challenge_id: id } : { stage_id: id }), points_awarded: -penalty }
+    await supabase.from('stage_progress').insert(progObj as any)
+    
     setFeedback(`Hint revealed! -${penalty} pts deducted.`)
     fetchArenaData()
   }
@@ -57,46 +65,53 @@ export default function AgentDashboard() {
     }
   }
 
-  const fetchArenaData = () => {
+  const fetchArenaData = async () => {
     if (!agentCallsign) {
       setLoading(false)
       return
     }
 
-    const profiles = DemoDB.getProfiles()
-    // Find the profile using the stored agent callsign
-    const prof = profiles.find(p => p.callsign === agentCallsign)
+    const { data: profiles } = await supabase.from('profiles').select('*')
+    const prof = profiles?.find(p => p.callsign === agentCallsign)
     
     if (!prof) {
-      // Auto-logout if removed
       setAgentCallsign('')
       setLoading(false)
       return
     }
 
-    const state = DemoDB.getSystemState()
-    setSystemState(state)
+    const { data: stateData } = await supabase.from('system_state').select('*').eq('id', 1).single()
+    const state = stateData || { phase: 'PHASE_1', reset_strategy: 'CUMULATIVE' }
+    setSystemState({ phase: state.phase, resetStrategy: state.reset_strategy as 'CUMULATIVE' | 'HARD_RESET' })
 
     if (prof) {
       setProfile(prof)
-      setTeamMembers(profiles.filter(p => p.team_id === prof.team_id))
-      const teams = DemoDB.getTeams()
-      const t = teams.find(t => t.id === prof.team_id)
+      setTeamMembers(profiles?.filter(p => p.team_id === prof.team_id) || [])
+      
+      const { data: teams } = await supabase.from('teams').select('*')
+      const t = teams?.find(t => t.id === prof.team_id)
       if (t) setAgentTeamName(t.name)
 
-      const progress = DemoDB.getStageProgress().filter(p => p.team_id === prof.team_id)
-      if (state.phase === 'PHASE_2' && state.resetStrategy === 'HARD_RESET') {
+      const { data: allProgress } = await supabase.from('stage_progress').select('*')
+      const progress = allProgress?.filter(p => p.team_id === prof.team_id) || []
+      
+      setStageProgress(progress)
+      
+      if (state.phase === 'PHASE_2' && state.reset_strategy === 'HARD_RESET') {
         setTotalScore(progress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0))
       } else {
         setTotalScore(progress.reduce((sum, p) => sum + p.points_awarded, 0))
       }
+      
+      const { data: allHints } = await supabase.from('hint_usage').select('*')
+      setHintUsage(allHints?.filter(h => h.profile_id === prof.id) || [])
     }
     
-    const r1 = DemoDB.getRound1Stages().filter(s => s.is_active !== false)
-    const r2 = DemoDB.getRound2Challenges().filter(c => c.is_active !== false)
+    const { data: r1Data } = await supabase.from('round1_stages').select('*').order('created_at', { ascending: true })
+    const { data: r2Data } = await supabase.from('round2_challenges').select('*').order('created_at', { ascending: true })
     
-    setRound1Stages(r1)
-    setRound2Challenges(r2)
+    setRound1Stages(r1Data?.filter(s => s.is_active !== false) || [])
+    setRound2Challenges(r2Data?.filter(c => c.is_active !== false) || [])
     setLoading(false)
   }
 
@@ -113,16 +128,16 @@ export default function AgentDashboard() {
     }
   }
 
-  const handleSubmitPhase1 = (stageId: string, correctFinalAnswer: string, points: number) => {
+  const handleSubmitPhase1 = async (stageId: string, correctFinalAnswer: string, points: number) => {
     if (!profile) return
-    const currentProgress = DemoDB.getStageProgress().find(p => p.team_id === profile.team_id && p.stage_id === stageId)
+    const currentProgress = stageProgress.find(p => p.team_id === profile.team_id && p.stage_id === stageId)
     if (currentProgress) {
       setFeedback('Checkpoint Already Secured by your team.')
       return
     }
 
     if (answers[stageId]?.trim().toLowerCase() === correctFinalAnswer.trim().toLowerCase()) {
-      DemoDB.addStageProgress({ profile_id: profile.id, team_id: profile.team_id, stage_id: stageId, points_awarded: points })
+      await supabase.from('stage_progress').insert({ profile_id: profile.id, team_id: profile.team_id, stage_id: stageId, points_awarded: points })
       setFeedback('Checkpoint Secured. Points Awarded.')
       fetchArenaData()
     } else {
@@ -130,28 +145,28 @@ export default function AgentDashboard() {
     }
   }
 
-  const handleSubmitPhase2 = (challengeId: string, correctFlag: string, points: number) => {
+  const handleSubmitPhase2 = async (chalId: string, correctFlag: string, points: number) => {
     if (!profile) return
     if (systemState.phase === 'PHASE_1') {
       setFeedback('Phase 2 is currently locked.')
       return
     }
-    const currentProgress = DemoDB.getStageProgress().find(p => p.team_id === profile.team_id && p.challenge_id === challengeId)
+    const currentProgress = stageProgress.find(p => p.team_id === profile.team_id && p.challenge_id === chalId)
     if (currentProgress) {
       setFeedback('System Already Breached by your team.')
       return
     }
 
-    if (flags[challengeId]?.trim() === correctFlag.trim()) {
-      DemoDB.addStageProgress({ profile_id: profile.id, team_id: profile.team_id, challenge_id: challengeId, points_awarded: points })
-      setFeedback('Breach Successful. Points Awarded.')
+    if (flags[chalId]?.trim() === correctFlag.trim()) {
+      await supabase.from('stage_progress').insert({ profile_id: profile.id, team_id: profile.team_id, challenge_id: chalId, points_awarded: points })
+      setFeedback('System Breached. Points Awarded.')
       fetchArenaData()
     } else {
       setFeedback('Invalid Flag.')
     }
   }
 
-  const handleAuth = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginError('')
     setAuthSuccess('')
@@ -165,8 +180,13 @@ export default function AgentDashboard() {
     const tPass = loginTeamPass.trim()
     const callsign = loginAgentName.trim().toUpperCase().replace(/ /g, '_')
     
-    const teams = DemoDB.getTeams()
-    const profiles = DemoDB.getProfiles()
+    const { data: teams } = await supabase.from('teams').select('*')
+    const { data: profiles } = await supabase.from('profiles').select('*')
+
+    if (!teams || !profiles) {
+      setLoginError('Database error.')
+      return
+    }
 
     if (authAction === 'register') {
       if (registerMode === 'create') {
@@ -176,8 +196,23 @@ export default function AgentDashboard() {
           return
         }
         
-        const newTeam = DemoDB.addTeam(tName, tPass)
-        DemoDB.addProfile(callsign, newTeam.id, true)
+        const { data: newTeamArray, error: teamErr } = await supabase.from('teams').insert({ name: tName, password: tPass }).select()
+        
+        if (teamErr) {
+          setLoginError(`DB Error (Teams): ${teamErr.message}`)
+          return
+        }
+
+        if (newTeamArray && newTeamArray.length > 0) {
+          const { error: profErr } = await supabase.from('profiles').insert({ callsign, team_id: newTeamArray[0].id, is_leader: true })
+          if (profErr) {
+             setLoginError(`DB Error (Profiles): ${profErr.message}`)
+             return
+          }
+        } else {
+          setLoginError('Failed to create team. Unknown error.')
+          return
+        }
         
         setAuthSuccess('Team registered successfully! Please login.')
         setAuthAction('login')
@@ -186,7 +221,7 @@ export default function AgentDashboard() {
         // Join existing team
         const team = teams.find(t => t.name.toLowerCase() === tName.toLowerCase() && t.password === tPass)
         if (!team) {
-          setLoginError('ACCESS DENIED: Invalid Team Name or Password.')
+          setLoginError(`ACCESS DENIED: Invalid Team Name or Password. (Debug: found ${teams.length} total teams in DB)`)
           return
         }
         
@@ -203,7 +238,12 @@ export default function AgentDashboard() {
           return
         }
         
-        DemoDB.addProfile(callsign, team.id, false)
+        const { error: joinErr } = await supabase.from('profiles').insert({ callsign, team_id: team.id, is_leader: false })
+        if (joinErr) {
+          setLoginError(`DB Error (Join): ${joinErr.message}`)
+          return
+        }
+
         setAuthSuccess('Agent registered successfully! Please login.')
         setAuthAction('login')
         return
@@ -212,7 +252,7 @@ export default function AgentDashboard() {
       // Login
       const team = teams.find(t => t.name.toLowerCase() === tName.toLowerCase() && t.password === tPass)
       if (!team) {
-        setLoginError('ACCESS DENIED: Invalid Team Name or Password.')
+        setLoginError(`ACCESS DENIED: Invalid Team Name or Password. (Debug: found ${teams.length} total teams in DB)`)
         return
       }
       
@@ -521,9 +561,9 @@ export default function AgentDashboard() {
                     </div>
                     {profile?.is_leader && member.id !== profile.id && (
                       <button 
-                        onClick={() => {
+                        onClick={async () => {
                           if(window.confirm(`Remove ${member.callsign} from the team?`)) {
-                            DemoDB.removeProfile(member.id);
+                            await supabase.from('profiles').delete().eq('id', member.id);
                             fetchArenaData();
                           }
                         }}
@@ -578,7 +618,7 @@ export default function AgentDashboard() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {round1Stages.map(stage => {
-                const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.stage_id === stage.id)
+                const isSecured = stageProgress.some(p => p.team_id === profile?.team_id && p.stage_id === stage.id)
                 return (
                   <div key={stage.id} onClick={() => setSelectedStageId(stage.id)} className={`cursor-pointer border ${isSecured ? 'border-cyan-500/40 bg-[#041011]' : 'border-slate-700/50 bg-[#030B12] hover:border-cyan-500/50 hover:bg-[#061019]'} p-5 rounded-xl relative overflow-hidden flex flex-col h-[160px] transition-all group`}>
                     
@@ -648,7 +688,7 @@ export default function AgentDashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {round2Challenges.map(chal => {
-                  const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.challenge_id === chal.id)
+                  const isSecured = stageProgress.some(p => p.team_id === profile?.team_id && p.challenge_id === chal.id)
                   return (
                     <div key={chal.id} onClick={() => setSelectedChallengeId(chal.id)} className={`cursor-pointer border ${isSecured ? 'border-cyan-500/40 bg-[#041011]' : 'border-slate-700/50 bg-[#030B12] hover:border-cyan-500/50 hover:bg-[#061019]'} p-5 rounded-xl relative overflow-hidden flex flex-col h-[160px] transition-all group`}>
                       
@@ -696,7 +736,7 @@ export default function AgentDashboard() {
         const stage = round1Stages.find(s => s.id === selectedStageId)
         if (!stage) return null
         const isClueUnlocked = clueUnlocked[stage.id]
-        const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.stage_id === stage.id)
+        const isSecured = stageProgress.some(p => p.team_id === profile?.team_id && p.stage_id === stage.id)
         
         return (
           <div className="fixed inset-0 bg-[#02070D]/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedStageId(null)}>
@@ -730,7 +770,7 @@ export default function AgentDashboard() {
                 </div>
 
                 {stage.hint && !isSecured && (() => {
-                  const hintUsed = DemoDB.hasUsedHint(profile?.id || '', stage.id)
+                  const hintUsed = hintUsage.some(h => h.profile_id === profile?.id && h.stage_id === stage.id)
                   return (
                     <div className="mb-6 text-center">
                       {hintUsed ? (
@@ -827,7 +867,7 @@ export default function AgentDashboard() {
       {selectedChallengeId && (() => {
         const chal = round2Challenges.find(c => c.id === selectedChallengeId)
         if (!chal) return null
-        const isSecured = DemoDB.getStageProgress().some(p => p.team_id === profile?.team_id && p.challenge_id === chal.id)
+        const isSecured = stageProgress.some(p => p.team_id === profile?.team_id && p.challenge_id === chal.id)
         
         return (
           <div className="fixed inset-0 bg-[#02070D]/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedChallengeId(null)}>
@@ -863,7 +903,7 @@ export default function AgentDashboard() {
                 </div>
 
                 {chal.hint && !isSecured && (() => {
-                  const hintUsed = DemoDB.hasUsedHint(profile?.id || '', undefined, chal.id)
+                  const hintUsed = hintUsage.some(h => h.profile_id === profile?.id && h.challenge_id === chal.id)
                   return (
                     <div className="mb-8 text-center">
                       {hintUsed ? (

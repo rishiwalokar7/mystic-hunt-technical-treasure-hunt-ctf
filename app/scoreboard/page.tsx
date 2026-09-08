@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DemoDB } from '@/lib/demo-db'
+import { supabase } from '@/lib/supabase'
 
 type LeaderboardEntry = {
   id: string
@@ -17,18 +17,25 @@ export default function LiveScoreboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchLeaderboard = () => {
-      const teams = DemoDB.getTeams()
-      const profiles = DemoDB.getProfiles()
-      const progress = DemoDB.getStageProgress()
-      const state = DemoDB.getSystemState()
+    const fetchLeaderboard = async () => {
+      const { data: teams } = await supabase.from('teams').select('*')
+      const { data: profiles } = await supabase.from('profiles').select('*')
+      const { data: progress } = await supabase.from('stage_progress').select('*')
+      const { data: stateData } = await supabase.from('system_state').select('*').eq('id', 1).single()
+
+      if (!teams || !profiles || !progress) {
+        setLoading(false)
+        return
+      }
+
+      const state = stateData || { phase: 'PHASE_1', reset_strategy: 'CUMULATIVE' }
 
       const rankedTeams = teams.map((team) => {
         const teamProgress = progress.filter(p => p.team_id === team.id)
         const teamMembers = profiles.filter(p => p.team_id === team.id).length
         
         let totalPoints = 0
-        if (state.phase === 'PHASE_2' && state.resetStrategy === 'HARD_RESET') {
+        if (state.phase === 'PHASE_2' && state.reset_strategy === 'HARD_RESET') {
           totalPoints = teamProgress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0)
         } else {
           totalPoints = teamProgress.reduce((sum, p) => sum + p.points_awarded, 0)

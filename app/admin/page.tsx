@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DemoDB } from '@/lib/demo-db'
+import { supabase } from '@/lib/supabase'
 
 type LeaderboardEntry = {
   id: string
@@ -72,27 +72,31 @@ export default function AdminCommandCenter() {
   const [lbLoading, setLbLoading] = useState(true)
 
   // Control State
-  const [systemState, setSystemState] = useState<{ phase: 'PHASE_1' | 'PHASE_2', resetStrategy: 'CUMULATIVE' | 'HARD_RESET' }>({ phase: 'PHASE_1', resetStrategy: 'CUMULATIVE' })
+  const [systemState, setSystemState] = useState<{ phase: 'PHASE_1' | 'PHASE_2', reset_strategy: 'CUMULATIVE' | 'HARD_RESET' }>({ phase: 'PHASE_1', reset_strategy: 'CUMULATIVE' })
   const [topN, setTopN] = useState('3')
 
-  const fetchNodes = () => {
-    setStages(DemoDB.getRound1Stages())
-    setChallenges(DemoDB.getRound2Challenges())
-    setTeamsList(DemoDB.getTeams())
+  const fetchNodes = async () => {
+    const { data: s } = await supabase.from('round1_stages').select('*').order('created_at', { ascending: false }); setStages(s || [])
+    const { data: c } = await supabase.from('round2_challenges').select('*').order('created_at', { ascending: false }); setChallenges(c || [])
+    const { data: t } = await supabase.from('teams').select('*').order('created_at', { ascending: false }); setTeamsList(t || [])
   }
 
-  const fetchLeaderboard = () => {
-    const teams = DemoDB.getTeams()
-    const profiles = DemoDB.getProfiles()
-    const progress = DemoDB.getStageProgress()
-    const state = DemoDB.getSystemState()
+  const fetchLeaderboard = async () => {
+    const { data: teams } = await supabase.from('teams').select('*')
+    const { data: profiles } = await supabase.from('profiles').select('*')
+    const { data: progress } = await supabase.from('stage_progress').select('*')
+    const { data: stateData } = await supabase.from('system_state').select('*').eq('id', 1).single()
+
+    if (!teams || !profiles || !progress) return
+
+    const state = stateData || { phase: 'PHASE_1', reset_strategy: 'CUMULATIVE' }
 
     const rankedTeams = teams.map((team) => {
       const teamProgress = progress.filter(p => p.team_id === team.id)
       const teamMembers = profiles.filter(p => p.team_id === team.id).length
       
       let totalPoints = 0
-      if (state.phase === 'PHASE_2' && state.resetStrategy === 'HARD_RESET') {
+      if (state.phase === 'PHASE_2' && state.reset_strategy === 'HARD_RESET') {
         totalPoints = teamProgress.filter(p => p.challenge_id).reduce((sum, p) => sum + p.points_awarded, 0)
       } else {
         totalPoints = teamProgress.reduce((sum, p) => sum + p.points_awarded, 0)
@@ -111,7 +115,7 @@ export default function AdminCommandCenter() {
     if (session === 'granted') setIsAuthed(true)
     fetchNodes()
     fetchLeaderboard()
-    setSystemState(DemoDB.getSystemState())
+    supabase.from('system_state').select('*').eq('id',1).single().then(({data}) => { if(data) setSystemState({ phase: data.phase as any, reset_strategy: data.reset_strategy as any }) })
     const interval = setInterval(fetchLeaderboard, 10000) 
     return () => clearInterval(interval)
   }, [])
@@ -132,12 +136,12 @@ export default function AdminCommandCenter() {
     setIsAuthed(false)
   }
 
-  const handleDeploy = (e: React.FormEvent) => {
+  const handleDeploy = async (e: React.FormEvent) => {
     e.preventDefault(); setStatusMsg(null)
 
     try {
       if (deployType === 'phase1') {
-        DemoDB.addRound1Stage({ 
+        await supabase.from('round1_stages').insert({ 
           title, 
           description,
           location_clue: locationClue,
@@ -151,7 +155,7 @@ export default function AdminCommandCenter() {
         setStatusMsg('Phase 1 Stage Deployed.')
         setLocationClue(''); setClueAnswer(''); setAccessCode(''); setFinalAnswer(''); setDescription(''); setHint1(''); setHintPenalty1('25');
       } else {
-        DemoDB.addRound2Challenge({ 
+        await supabase.from('round2_challenges').insert({ 
           title, 
           description, 
           category: category || 'GENERAL',
@@ -172,55 +176,50 @@ export default function AdminCommandCenter() {
     }
   }
 
-  const handleDelete = (id: string, type: 'stage' | 'challenge') => {
-    if (type === 'stage') DemoDB.deleteRound1Stage(id)
-    else DemoDB.deleteRound2Challenge(id)
+  const handleDelete = async (id: string, type: 'stage' | 'challenge') => {
+    if (type === 'stage') await supabase.from('round1_stages').delete().eq('id', id)
+    else await supabase.from('round2_challenges').delete().eq('id', id)
     fetchNodes()
   }
 
-  const handleToggleLock = (id: string, type: 'stage' | 'challenge', currentState: boolean) => {
+  const handleToggleLock = async (id: string, type: 'stage' | 'challenge', currentState: boolean) => {
     const newState = !currentState;
-    if (type === 'stage') DemoDB.toggleRound1Stage(id, newState)
-    else DemoDB.toggleRound2Challenge(id, newState)
+    if (type === 'stage') await supabase.from('round1_stages').update({ is_active: newState }).eq('id', id)
+    else await supabase.from('round2_challenges').update({ is_active: newState }).eq('id', id)
     fetchNodes()
   }
 
-  const handleResetLeaderboard = () => {
+  const handleResetLeaderboard = async () => {
     if (!window.confirm("WARNING: This will wipe all agent scores, reset the leaderboard to 0, and return the event to PHASE 1. Are you sure?")) return
-    DemoDB.resetStageProgress()
+    await supabase.from('stage_progress').delete().neq('id', '00000000-0000-0000-0000-000000000000')
     
     // Unlock Round 1
-    const s = DemoDB.getRound1Stages()
-    s.forEach(stage => DemoDB.toggleRound1Stage(stage.id, true))
+    await supabase.from('round1_stages').update({ is_active: true }).neq('id', '00000000-0000-0000-0000-000000000000')
     
     // Reset Global State to Phase 1
-    const newState = { phase: 'PHASE_1' as const, resetStrategy: 'CUMULATIVE' as const }
-    DemoDB.setSystemState(newState)
-    setSystemState(newState)
+    const newState = { phase: 'PHASE_1' as const, reset_strategy: 'CUMULATIVE' as const }
+    await supabase.from('system_state').update({ phase: 'PHASE_1', reset_strategy: 'CUMULATIVE' }).eq('id', 1)
+    setSystemState(newState as any)
 
     setStatusMsg('>>> EVENT RESET TO PHASE 1 AND LEADERBOARD WIPED.')
     fetchLeaderboard()
     fetchNodes()
   }
 
-  const handleInitiateRound2 = () => {
+  const handleInitiateRound2 = async () => {
     if (!window.confirm("WARNING: This will lock all Phase 1 nodes, allow ALL teams into Phase 2, and reset the leaderboard to 0. Are you sure?")) return
 
     // 1. Lock Round 1
-    const s = DemoDB.getRound1Stages()
-    s.forEach(stage => DemoDB.toggleRound1Stage(stage.id, false))
+    await supabase.from('round1_stages').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000')
     
     // 2. Promote ALL teams and wipe leaderboard
-    DemoDB.resetStageProgress()
-    const teams = DemoDB.getTeams()
-    teams.forEach(team => {
-      DemoDB.updateTeamFinalistStatus(team.id, true)
-    })
+    await supabase.from('stage_progress').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('teams').update({ is_finalist: true }).neq('id', '00000000-0000-0000-0000-000000000000')
 
     // 3. Update Global State
-    const newState = { phase: 'PHASE_2' as const, resetStrategy: 'HARD_RESET' as const }
-    DemoDB.setSystemState(newState)
-    setSystemState(newState)
+    const newState = { phase: 'PHASE_2' as const, reset_strategy: 'HARD_RESET' as const }
+    await supabase.from('system_state').update({ phase: 'PHASE_2', reset_strategy: 'HARD_RESET' }).eq('id', 1)
+    setSystemState(newState as any)
     
     setStatusMsg('>>> PHASE 2 INITIATED. MAINFRAME UNLOCKED FOR ALL TEAMS.')
     fetchLeaderboard()
@@ -408,9 +407,9 @@ export default function AdminCommandCenter() {
               <div className="flex flex-col md:flex-row gap-4">
                 <input type="text" placeholder="Team Name" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} className="flex-1 bg-[#061019] border border-slate-700/50 rounded-lg p-3.5 text-slate-200 text-sm outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono" />
                 <input type="text" placeholder="Team Password" value={newTeamPass} onChange={e => setNewTeamPass(e.target.value)} className="flex-1 bg-[#061019] border border-slate-700/50 rounded-lg p-3.5 text-slate-200 text-sm outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all font-mono" />
-                <button onClick={() => {
+                <button onClick={async () => {
                   if(!newTeamName || !newTeamPass) return;
-                  DemoDB.addTeam(newTeamName, newTeamPass);
+                  await supabase.from('teams').insert({ name: newTeamName, password: newTeamPass });
                   setNewTeamName(''); setNewTeamPass('');
                   fetchNodes();
                 }} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 uppercase text-xs font-bold tracking-widest rounded-lg transition-colors shadow-[0_0_10px_rgba(6,182,212,0.2)] py-3 md:py-0">
@@ -430,10 +429,10 @@ export default function AdminCommandCenter() {
                     </div>
                   </div>
                   <div className="flex gap-2 w-full md:w-auto">
-                    <button onClick={() => { DemoDB.updateTeamFinalistStatus(team.id, !team.is_finalist); fetchNodes() }} className="flex-1 md:flex-none text-[10px] font-bold uppercase border border-cyan-900/50 bg-cyan-950/20 px-4 py-2.5 rounded-lg text-cyan-400 hover:bg-cyan-900/40 transition-colors font-mono">
+                    <button onClick={async () => { await supabase.from('teams').update({ is_finalist: !team.is_finalist }).eq('id', team.id); fetchNodes() }} className="flex-1 md:flex-none text-[10px] font-bold uppercase border border-cyan-900/50 bg-cyan-950/20 px-4 py-2.5 rounded-lg text-cyan-400 hover:bg-cyan-900/40 transition-colors font-mono">
                       Toggle Access
                     </button>
-                    <button onClick={() => { if(window.confirm('Delete this team?')) { DemoDB.deleteTeam(team.id); fetchNodes() } }} className="flex-1 md:flex-none text-[10px] font-bold uppercase border border-red-900/30 bg-red-950/10 px-4 py-2.5 rounded-lg text-red-500 hover:bg-red-900/20 transition-colors font-mono">
+                    <button onClick={async () => { if(window.confirm('Delete this team?')) { await supabase.from('teams').delete().eq('id', team.id); fetchNodes() } }} className="flex-1 md:flex-none text-[10px] font-bold uppercase border border-red-900/30 bg-red-950/10 px-4 py-2.5 rounded-lg text-red-500 hover:bg-red-900/20 transition-colors font-mono">
                       Delete
                     </button>
                   </div>
