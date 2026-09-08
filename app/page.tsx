@@ -11,7 +11,9 @@ export default function AgentDashboard() {
   const [loginTeamPass, setLoginTeamPass] = useState('')
   const [loginAgentName, setLoginAgentName] = useState('')
   const [loginError, setLoginError] = useState('')
-  const [loginMode, setLoginMode] = useState<'join' | 'create'>('join')
+  const [authAction, setAuthAction] = useState<'login' | 'register'>('login')
+  const [registerMode, setRegisterMode] = useState<'create' | 'join'>('join')
+  const [authSuccess, setAuthSuccess] = useState('')
   
   const [profile, setProfile] = useState<any>(null)
   const [teamMembers, setTeamMembers] = useState<any[]>([])
@@ -149,9 +151,10 @@ export default function AgentDashboard() {
     }
   }
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleAuth = (e: React.FormEvent) => {
     e.preventDefault()
     setLoginError('')
+    setAuthSuccess('')
     
     if (!loginTeamName.trim() || !loginTeamPass.trim() || !loginAgentName.trim()) {
       setLoginError('All fields are required.')
@@ -163,44 +166,65 @@ export default function AgentDashboard() {
     const callsign = loginAgentName.trim().toUpperCase().replace(/ /g, '_')
     
     const teams = DemoDB.getTeams()
-    
-    if (loginMode === 'create') {
-      const existingTeam = teams.find(t => t.name.toLowerCase() === tName.toLowerCase())
-      if (existingTeam) {
-        setLoginError('Team Name is already taken.')
+    const profiles = DemoDB.getProfiles()
+
+    if (authAction === 'register') {
+      if (registerMode === 'create') {
+        const existingTeam = teams.find(t => t.name.toLowerCase() === tName.toLowerCase())
+        if (existingTeam) {
+          setLoginError('Team Name is already taken.')
+          return
+        }
+        
+        const newTeam = DemoDB.addTeam(tName, tPass)
+        DemoDB.addProfile(callsign, newTeam.id, true)
+        
+        setAuthSuccess('Team registered successfully! Please login.')
+        setAuthAction('login')
+        return
+      } else {
+        // Join existing team
+        const team = teams.find(t => t.name.toLowerCase() === tName.toLowerCase() && t.password === tPass)
+        if (!team) {
+          setLoginError('ACCESS DENIED: Invalid Team Name or Password.')
+          return
+        }
+        
+        const teamProfiles = profiles.filter(p => p.team_id === team.id)
+        let prof = profiles.find(p => p.callsign === callsign && p.team_id === team.id)
+        
+        if (prof) {
+          setLoginError('Agent already registered in this team. Please login.')
+          return
+        }
+        
+        if (teamProfiles.length >= 4) {
+          setLoginError('Team is already full (Max 4 Agents).')
+          return
+        }
+        
+        DemoDB.addProfile(callsign, team.id, false)
+        setAuthSuccess('Agent registered successfully! Please login.')
+        setAuthAction('login')
+        return
+      }
+    } else {
+      // Login
+      const team = teams.find(t => t.name.toLowerCase() === tName.toLowerCase() && t.password === tPass)
+      if (!team) {
+        setLoginError('ACCESS DENIED: Invalid Team Name or Password.')
         return
       }
       
-      const newTeam = DemoDB.addTeam(tName, tPass)
-      DemoDB.addProfile(callsign, newTeam.id, true)
+      let prof = profiles.find(p => p.callsign === callsign && p.team_id === team.id)
+      if (!prof) {
+        setLoginError('Agent not registered in this team. Please register first.')
+        return
+      }
+      
       setAgentCallsign(callsign)
       setLoading(true)
-      return
     }
-
-    // Join / Login Mode
-    const team = teams.find(t => t.name.toLowerCase() === tName.toLowerCase() && t.password === tPass)
-
-    if (!team) {
-      setLoginError('ACCESS DENIED: Invalid Team Name or Password.')
-      return
-    }
-
-    const profiles = DemoDB.getProfiles()
-    const teamProfiles = profiles.filter(p => p.team_id === team.id)
-    let prof = profiles.find(p => p.callsign === callsign && p.team_id === team.id)
-    
-    if (!prof && teamProfiles.length >= 4) {
-      setLoginError('Team is already full (Max 4 Agents).')
-      return
-    }
-
-    if (!prof) {
-      prof = DemoDB.addProfile(callsign, team.id, false)
-    }
-    
-    setAgentCallsign(callsign)
-    setLoading(true)
   }
 
   if (loading) return <div className="min-h-screen bg-black text-green-400 font-mono p-10 uppercase tracking-widest">{'>'} Initializing Mainframe...</div>
@@ -214,20 +238,41 @@ export default function AgentDashboard() {
           
           <div className="flex gap-2 mb-6">
             <button 
-              onClick={() => { setLoginMode('join'); setLoginError(''); }} 
-              className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${loginMode === 'join' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
+              type="button"
+              onClick={() => { setAuthAction('login'); setLoginError(''); setAuthSuccess(''); }} 
+              className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${authAction === 'login' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
             >
-              Join / Login
+              Login
             </button>
             <button 
-              onClick={() => { setLoginMode('create'); setLoginError(''); }} 
-              className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${loginMode === 'create' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
+              type="button"
+              onClick={() => { setAuthAction('register'); setLoginError(''); setAuthSuccess(''); }} 
+              className={`flex-1 py-2 text-[10px] uppercase font-bold tracking-widest rounded border transition-colors ${authAction === 'register' ? 'bg-green-950/40 border-green-500 text-green-400' : 'border-zinc-800 text-zinc-600 hover:border-zinc-600'}`}
             >
-              Create Team
+              Register
             </button>
           </div>
+
+          {authAction === 'register' && (
+            <div className="flex gap-2 mb-6">
+              <button 
+                type="button"
+                onClick={() => { setRegisterMode('join'); setLoginError(''); setAuthSuccess(''); }} 
+                className={`flex-1 py-1 text-[9px] uppercase tracking-widest rounded border transition-colors ${registerMode === 'join' ? 'bg-zinc-800 border-zinc-600 text-white' : 'border-zinc-900 text-zinc-600 hover:border-zinc-700'}`}
+              >
+                Join Existing Team
+              </button>
+              <button 
+                type="button"
+                onClick={() => { setRegisterMode('create'); setLoginError(''); setAuthSuccess(''); }} 
+                className={`flex-1 py-1 text-[9px] uppercase tracking-widest rounded border transition-colors ${registerMode === 'create' ? 'bg-zinc-800 border-zinc-600 text-white' : 'border-zinc-900 text-zinc-600 hover:border-zinc-700'}`}
+              >
+                Create New Team
+              </button>
+            </div>
+          )}
           
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleAuth} className="space-y-6">
             <div>
               <label className="text-[10px] text-green-500 uppercase tracking-widest block mb-2">Team Name</label>
               <input 
@@ -252,7 +297,7 @@ export default function AgentDashboard() {
               />
             </div>
             <div>
-              <label className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-2">{loginMode === 'create' ? 'Leader Agent Name' : 'Your Agent Name'}</label>
+              <label className="text-[10px] text-zinc-500 uppercase tracking-widest block mb-2">{authAction === 'register' && registerMode === 'create' ? 'Leader Agent Name' : 'Your Agent Name'}</label>
               <input 
                 type="text" 
                 value={loginAgentName}
@@ -263,13 +308,14 @@ export default function AgentDashboard() {
               />
             </div>
             
+            {authSuccess && <p className="text-[10px] text-green-500 uppercase tracking-widest text-center">{authSuccess}</p>}
             {loginError && <p className="text-[10px] text-red-500 uppercase tracking-widest text-center">{loginError}</p>}
             
             <button 
               type="submit"
               className="w-full bg-green-950/40 border border-green-600/50 hover:bg-green-900/60 text-green-400 py-4 rounded text-sm font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(34,197,94,0.1)] hover:shadow-[0_0_25px_rgba(34,197,94,0.3)]"
             >
-              {loginMode === 'create' ? 'Register & Initialize' : 'Initialize Uplink'}
+              {authAction === 'register' ? (registerMode === 'create' ? 'Register New Team' : 'Register Agent') : 'Initialize Uplink'}
             </button>
           </form>
           <div className="mt-6 text-center">
