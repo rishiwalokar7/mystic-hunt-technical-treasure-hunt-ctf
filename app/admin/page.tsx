@@ -67,6 +67,46 @@ export default function AdminCommandCenter() {
   const [stages, setStages] = useState<any[]>([])
   const [challenges, setChallenges] = useState<any[]>([])
 
+  // Edit State
+  const [editingItem, setEditingItem] = useState<any>(null)
+  const [editType, setEditType] = useState<'stage' | 'challenge' | null>(null)
+  
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingItem || !editType) return
+    try {
+      if (editType === 'stage') {
+        await supabase.from('round1_stages').update({
+          title: editingItem.title,
+          description: editingItem.description,
+          location_clue: editingItem.location_clue,
+          clue_answer: editingItem.clue_answer,
+          access_code: editingItem.access_code,
+          final_answer: editingItem.final_answer,
+          points: editingItem.points,
+          hint: editingItem.hint,
+          hint_penalty: editingItem.hint_penalty
+        }).eq('id', editingItem.id)
+      } else {
+        await supabase.from('round2_challenges').update({
+          title: editingItem.title,
+          description: editingItem.description,
+          category: editingItem.category,
+          flag: editingItem.flag,
+          points: editingItem.points,
+          hint: editingItem.hint,
+          hint_penalty: editingItem.hint_penalty
+        }).eq('id', editingItem.id)
+      }
+      setStatusMsg('Item Updated Successfully.')
+      setEditingItem(null)
+      setEditType(null)
+      fetchNodes()
+    } catch (err: any) {
+      setStatusMsg(`Error updating: ${err.message}`)
+    }
+  }
+
   // Leaderboard State
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [lbLoading, setLbLoading] = useState(true)
@@ -468,6 +508,7 @@ export default function AdminCommandCenter() {
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      <button onClick={() => { setEditingItem(s); setEditType('stage'); }} className="text-[10px] border border-blue-900/50 text-blue-500 hover:bg-blue-950/20 px-4 py-2 rounded-lg uppercase tracking-widest transition-colors font-bold font-mono">Edit</button>
                       <button onClick={() => handleToggleLock(s.id, 'stage', s.is_active !== false)} className={`text-[10px] border px-4 py-2 rounded-lg uppercase tracking-widest transition-colors font-bold font-mono ${s.is_active !== false ? 'border-amber-900/50 text-amber-500 hover:bg-amber-950/20' : 'border-cyan-900/50 text-cyan-500 hover:bg-cyan-950/20'}`}>
                         {s.is_active !== false ? 'Lock' : 'Activate'}
                       </button>
@@ -501,6 +542,7 @@ export default function AdminCommandCenter() {
                       </div>
                     </div>
                     <div className="flex gap-2">
+                      <button onClick={() => { setEditingItem(c); setEditType('challenge'); }} className="text-[10px] border border-blue-900/50 text-blue-500 hover:bg-blue-950/20 px-4 py-2 rounded-lg uppercase tracking-widest transition-colors font-bold font-mono">Edit</button>
                        <button onClick={() => handleToggleLock(c.id, 'challenge', c.is_active !== false)} className={`text-[10px] border px-4 py-2 rounded-lg uppercase tracking-widest transition-colors font-bold font-mono ${c.is_active !== false ? 'border-amber-900/50 text-amber-500 hover:bg-amber-950/20' : 'border-cyan-900/50 text-cyan-500 hover:bg-cyan-950/20'}`}>
                         {c.is_active !== false ? 'Lock' : 'Activate'}
                       </button>
@@ -578,6 +620,45 @@ export default function AdminCommandCenter() {
         )}
 
       </div>
+
+      {editingItem && (
+        <div className="fixed inset-0 bg-[#02070D]/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-[#061019] border border-slate-700/50 w-full max-w-2xl rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-[#030B12] px-4 py-3 flex justify-between items-center border-b border-slate-800/60">
+              <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest">EDIT {editType}</span>
+              <button onClick={() => { setEditingItem(null); setEditType(null); }} className="text-slate-500 hover:text-white">✕</button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <input type="text" placeholder="Title" value={editingItem.title || ''} onChange={e => setEditingItem({...editingItem, title: e.target.value})} className="w-full bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" required />
+                <textarea placeholder="Description" value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none h-24 font-mono" required />
+                
+                {editType === 'stage' && (
+                  <>
+                    <textarea placeholder="Location Clue" value={editingItem.location_clue || ''} onChange={e => setEditingItem({...editingItem, location_clue: e.target.value})} className="w-full bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none h-24 font-mono" required />
+                    <input type="text" placeholder="Clue Answer" value={editingItem.clue_answer || ''} onChange={e => setEditingItem({...editingItem, clue_answer: e.target.value})} className="w-full bg-[#030B12] border border-amber-900/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" required />
+                    <input type="text" placeholder="Access Code" value={editingItem.access_code || ''} onChange={e => setEditingItem({...editingItem, access_code: e.target.value})} className="w-full bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" required />
+                    <input type="text" placeholder="Final Answer" value={editingItem.final_answer || ''} onChange={e => setEditingItem({...editingItem, final_answer: e.target.value})} className="w-full bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" required />
+                  </>
+                )}
+                {editType === 'challenge' && (
+                  <>
+                    <input type="text" placeholder="Category" value={editingItem.category || ''} onChange={e => setEditingItem({...editingItem, category: e.target.value})} className="w-full bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" required />
+                    <input type="text" placeholder="Flag" value={editingItem.flag || ''} onChange={e => setEditingItem({...editingItem, flag: e.target.value})} className="w-full bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" required />
+                  </>
+                )}
+                <div className="flex gap-4">
+                  <input type="text" placeholder="Hint" value={editingItem.hint || ''} onChange={e => setEditingItem({...editingItem, hint: e.target.value})} className="flex-1 bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" />
+                  <input type="number" placeholder="Hint Penalty" value={editingItem.hint_penalty || ''} onChange={e => setEditingItem({...editingItem, hint_penalty: parseInt(e.target.value)})} className="w-32 bg-[#030B12] border border-slate-700/50 rounded-lg p-3 text-slate-200 text-sm outline-none font-mono" />
+                </div>
+                <input type="number" placeholder="Points" value={editingItem.points || ''} onChange={e => setEditingItem({...editingItem, points: parseInt(e.target.value)})} className="w-full bg-[#030B12] border border-cyan-900/50 rounded-lg p-3 text-cyan-400 font-bold outline-none font-mono" required />
+                <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-lg text-xs font-bold tracking-widest uppercase transition-all">Save Changes</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

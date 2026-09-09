@@ -117,6 +117,8 @@ export default function AgentDashboard() {
 
   useEffect(() => {
     fetchArenaData()
+    const interval = setInterval(fetchArenaData, 10000)
+    return () => clearInterval(interval)
   }, [agentCallsign])
 
   const handleUnlockCode = (stageId: string, correctCode: string) => {
