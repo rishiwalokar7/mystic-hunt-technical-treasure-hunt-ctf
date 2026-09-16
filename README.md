@@ -1,36 +1,141 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mystic Hunt
+
+Mystic Hunt is a web-based technical treasure hunt platform that combines physical clue-based exploration with digital challenges.
+
+The platform is designed for college technical events and supports multiple types of challenges, including OSINT, cryptography, cybersecurity, programming, logic, and CTF challenges.
+
+## Overview
+
+Mystic Hunt has two phases:
+
+### Phase 1 — Treasure Hunt
+
+Teams receive clues through the platform and use them to find physical locations around the event venue.
+
+At each location, participants find and scan a QR code that unlocks the next digital challenge.
+
+**Flow:**
+
+```text
+Clue → Find Location → Scan QR → Unlock Challenge → Solve → Next Clue
+```
+
+Challenges can include:
+
+* OSINT
+* Ciphers and cryptography
+* Encoding and decoding
+* Programming
+* Logic puzzles
+* Cybersecurity
+* Beginner CTF challenges
+
+### Phase 2 — CTF
+
+Qualified teams move to a dedicated CTF-style round.
+
+This phase focuses more heavily on technical challenges such as:
+
+* Web security
+* Cryptography
+* OSINT
+* Digital forensics
+* Programming
+* Reverse engineering
+* General cybersecurity
+
+Teams are ranked using their scores, with completion time used as a tie-breaker.
+
+## Features
+
+* Team-based gameplay
+* QR-based checkpoints
+* Digital challenge system
+* Multiple challenge categories
+* Progress tracking
+* Leaderboard
+* Score-based ranking
+* Separate rounds and qualification stages
+* Admin-controlled challenges
+* Online platform for managing the event
+
+## Tech Stack
+
+* **Next.js**
+* **React**
+* **TypeScript**
+* **Tailwind CSS**
+* **Supabase**
+* **Vercel**
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+Make sure you have Node.js and npm installed.
+
+### Installation
+
+Clone the repository:
+
+```bash
+git clone <repository-url>
+cd mystic-hunt
+```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` file in the project root:
 
-## Learn More
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-To learn more about Next.js, take a look at the following resources:
+Add any other environment variables required by the project.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Do not commit `.env.local` or private credentials to the repository.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```text
+mystic-hunt/
+├── app/
+├── components/
+├── lib/
+├── public/
+├── styles/
+├── .env.local
+├── package.json
+└── README.md
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Development
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The main application is located in the `app/` directory.
+
+Changes made during development are automatically reflected when running the Next.js development server.
+
+## Deployment
+
+The project can be deployed using Vercel or another platform that supports Next.js.
+
+## Purpose
+
+Mystic Hunt was built to provide a platform for conducting technical treasure hunts and CTF-style competitions in college events.
+
+It can be adapted for different event formats, challenge sets, venues, and scoring systems.
