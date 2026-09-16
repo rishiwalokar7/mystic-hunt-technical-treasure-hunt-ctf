@@ -1,78 +1,115 @@
-# Mystic Hunt
+# Mystic Hunt — Technical Treasure Hunt & CTF Platform
 
-Mystic Hunt is a web-based technical treasure hunt platform that combines physical clue-based exploration with digital challenges.
+**Mystic Hunt** is a web-based **technical treasure hunt and CTF platform** built for college technical fests, cybersecurity events, and student competitions. It combines **physical treasure hunts, QR checkpoints, OSINT, cryptography, programming, cybersecurity challenges, and Capture The Flag (CTF)** into a single platform.
 
-The platform is designed for college technical events and supports multiple types of challenges, including OSINT, cryptography, cybersecurity, programming, logic, and CTF challenges.
+The platform allows organizers to create and manage technical treasure hunts where participants solve clues, find locations, scan QR codes, unlock challenges, and progress through the competition using an online leaderboard.
 
-## Overview
+## What is Mystic Hunt?
 
-Mystic Hunt has two phases:
+Mystic Hunt combines a traditional **treasure hunt** with **technical and cybersecurity challenges**.
 
-### Phase 1 — Treasure Hunt
-
-Teams receive clues through the platform and use them to find physical locations around the event venue.
-
-At each location, participants find and scan a QR code that unlocks the next digital challenge.
-
-**Flow:**
+Instead of only searching for physical objects, participants solve digital challenges to progress through the hunt.
 
 ```text
-Clue → Find Location → Scan QR → Unlock Challenge → Solve → Next Clue
+Clue
+  ↓
+Find Location
+  ↓
+Find QR Checkpoint
+  ↓
+Scan QR
+  ↓
+Unlock Challenge
+  ↓
+Solve Challenge
+  ↓
+Continue Hunt
 ```
 
-Challenges can include:
+The platform can be adapted for **college fests, technical events, cybersecurity competitions, CTF events, and student clubs**.
+
+## Two-Phase Competition
+
+### Phase 1 — Technical Treasure Hunt
+
+Participants follow clues that lead them to different locations around the event venue.
+
+At each checkpoint, a QR code unlocks a digital challenge.
+
+Challenge categories can include:
 
 * OSINT
-* Ciphers and cryptography
-* Encoding and decoding
+* Cryptography
+* Ciphers
+* Encoding & Decoding
 * Programming
-* Logic puzzles
+* Logic
 * Cybersecurity
+* Digital Forensics
 * Beginner CTF challenges
 
 ### Phase 2 — CTF
 
-Qualified teams move to a dedicated CTF-style round.
+The second phase focuses on Capture The Flag and more technical challenges.
 
-This phase focuses more heavily on technical challenges such as:
+Possible categories include:
 
-* Web security
+* Web Security
 * Cryptography
 * OSINT
-* Digital forensics
+* Digital Forensics
+* Reverse Engineering
 * Programming
-* Reverse engineering
-* General cybersecurity
+* Cybersecurity
+* Miscellaneous CTF challenges
 
-Teams are ranked using their scores, with completion time used as a tie-breaker.
+Teams are ranked according to their challenge scores, with completion time used as a tie-breaker.
 
-## Features
+## Platform Features
 
-* Team-based gameplay
-* QR-based checkpoints
-* Digital challenge system
-* Multiple challenge categories
-* Progress tracking
-* Leaderboard
-* Score-based ranking
-* Separate rounds and qualification stages
-* Admin-controlled challenges
-* Online platform for managing the event
+* **Team-based competition**
+* **QR code checkpoints**
+* **Digital clue system**
+* **Technical challenge system**
+* **OSINT and CTF challenges**
+* **Real-time progress tracking**
+* **Leaderboard**
+* **Score-based ranking**
+* **Multiple competition phases**
+* **Challenge progression**
+* **Admin-controlled event content**
 
-## Tech Stack
+## Technology Stack
 
-* **Next.js**
-* **React**
-* **TypeScript**
-* **Tailwind CSS**
-* **Supabase**
-* **Vercel**
+| Technology   | Usage                         |
+| ------------ | ----------------------------- |
+| Next.js      | Web application               |
+| React        | UI components                 |
+| TypeScript   | Application development       |
+| Tailwind CSS | Styling                       |
+| Supabase     | Database and backend services |
+| Vercel       | Deployment                    |
+
+## Use Cases
+
+Mystic Hunt can be used to organize:
+
+* College technical treasure hunts
+* Cybersecurity competitions
+* CTF events
+* Technical fest competitions
+* Coding club events
+* Cybersecurity club events
+* OSINT competitions
+* Interactive campus treasure hunts
+* Student hackathon side events
 
 ## Getting Started
 
 ### Prerequisites
 
-Make sure you have Node.js and npm installed.
+* Node.js
+* npm
 
 ### Installation
 
@@ -89,26 +126,28 @@ Install dependencies:
 npm install
 ```
 
-Run the development server:
+Start the development server:
 
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000 in your browser.
+Open:
+
+```text
+http://localhost:3000
+```
 
 ## Environment Variables
 
-Create a `.env.local` file in the project root:
+Create a `.env.local` file:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-Add any other environment variables required by the project.
-
-Do not commit `.env.local` or private credentials to the repository.
+Do not commit private credentials or `.env.local` to the repository.
 
 ## Project Structure
 
@@ -124,18 +163,32 @@ mystic-hunt/
 └── README.md
 ```
 
-## Development
-
-The main application is located in the `app/` directory.
-
-Changes made during development are automatically reflected when running the Next.js development server.
-
 ## Deployment
 
-The project can be deployed using Vercel or another platform that supports Next.js.
+Mystic Hunt is built with Next.js and can be deployed using Vercel or any platform that supports Next.js applications.
 
-## Purpose
+## Contributing
 
-Mystic Hunt was built to provide a platform for conducting technical treasure hunts and CTF-style competitions in college events.
+Contributions are welcome.
 
-It can be adapted for different event formats, challenge sets, venues, and scoring systems.
+You can contribute by:
+
+* Adding new challenge types
+* Improving the leaderboard
+* Adding new authentication features
+* Improving the admin panel
+* Adding CTF challenge integrations
+* Improving the UI/UX
+* Fixing bugs
+
+## Keywords
+
+Technical Treasure Hunt · Online Treasure Hunt · CTF Platform · Capture The Flag · Cybersecurity Competition · College Treasure Hunt · QR Code Treasure Hunt · OSINT Challenge · Cryptography Challenge · Cybersecurity CTF · Technical Fest · College CTF · Programming Challenges · Digital Forensics
+
+## License
+
+Add your preferred license here.
+
+---
+
+**Mystic Hunt is an open platform for building interactive technical treasure hunts and CTF-style competitions.**
